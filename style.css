@@ -1,0 +1,370 @@
+/* =============================================================
+   PROQUAL — Ponto de Presença
+   Cores em variáveis: muda aqui para aplicar a identidade visual
+   exata da PROQUAL (logo, cores da marca) quando os tiveres.
+   ============================================================= */
+:root {
+  --bg: #17181c;
+  --bg-elevated: #202126;
+  --bg-card: #26272d;
+  --border: #34353b;
+  --text: #f2f2f0;
+  --text-muted: #9a9a9f;
+  --accent: #e8720c;
+  --accent-dark: #a4520c;
+  --green: #23c552;
+  --green-bg: #16321f;
+  --green-border: #234a2c;
+  --red: #ef4444;
+  --red-bg: #3a1c1c;
+  --red-border: #522525;
+  --radius: 14px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  min-height: 100%;
+}
+
+body {
+  background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 2px, transparent 2px, transparent 14px);
+}
+
+.app {
+  max-width: 560px;
+  margin: 0 auto;
+  min-height: 100vh;
+  padding: 24px 20px 40px;
+  position: relative;
+}
+
+.screen { display: none; animation: fade-in .15s ease-out; }
+.screen.is-active { display: block; }
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Header / nav ---------- */
+.screen-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.screen-header h2 {
+  font-size: 17px;
+  letter-spacing: 0.5px;
+  margin: 0;
+  text-transform: uppercase;
+  font-weight: 800;
+}
+.back-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.back-btn:hover { background: var(--border); }
+.link-action--top {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* ---------- Home ---------- */
+.home-hero { text-align: left; margin-bottom: 32px; }
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+.brand-mark {
+  width: 38px; height: 38px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #1a1a1a;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 900;
+  font-size: 20px;
+}
+.brand-mark--lg { width: 56px; height: 56px; font-size: 28px; margin: 0 auto 20px; background: var(--bg-card); }
+.brand-name {
+  color: var(--accent);
+  letter-spacing: 3px;
+  font-weight: 700;
+  font-size: 13px;
+}
+.home-hero h1 {
+  font-size: 40px;
+  line-height: 1.08;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  margin: 0 0 14px;
+}
+.muted { color: var(--text-muted); font-size: 15px; line-height: 1.5; margin: 0; }
+
+.card-stack { display: flex; flex-direction: column; gap: 14px; }
+
+.option-card, .direction-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  text-align: left;
+  padding: 20px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+}
+.option-card--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #201400;
+}
+.option-icon { font-size: 26px; }
+.option-text { display: flex; flex-direction: column; gap: 2px; }
+.option-text strong { font-size: 16px; letter-spacing: 0.3px; }
+.option-text small { font-size: 13px; opacity: 0.75; }
+.option-card--primary .option-text small { color: #3a2400; opacity: 0.85; }
+
+/* ---------- Lists ---------- */
+.list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 15px;
+  text-align: left;
+}
+.list-item:hover { border-color: var(--accent); }
+.list-item .avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.list-item .li-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.list-item .li-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-item .li-tag {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.list-empty { color: var(--text-muted); font-size: 14px; padding: 10px 2px; }
+
+.link-action {
+  display: block;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 6px 2px;
+}
+
+/* ---------- Inputs / buttons ---------- */
+.text-input {
+  width: 100%;
+  padding: 15px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--accent);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 15px;
+  margin-bottom: 14px;
+  font-family: inherit;
+}
+.text-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(232,114,12,0.2); }
+.text-input--sm { margin-bottom: 0; padding: 10px 12px; font-size: 13px; border-color: var(--border); }
+
+.btn-row { display: flex; gap: 12px; }
+.btn {
+  flex: 1;
+  padding: 15px 18px;
+  border-radius: 12px;
+  border: none;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn--ghost { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); }
+.btn--accent { background: var(--accent-dark); color: #fff; }
+.btn--accent:hover { background: var(--accent); }
+.btn--wide { width: 100%; }
+
+/* ---------- Direction cards ---------- */
+.direction-card { margin-bottom: 14px; }
+.direction-card--in { background: var(--green-bg); border-color: var(--green-border); }
+.direction-card--out { background: var(--red-bg); border-color: var(--red-border); }
+.dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+.dot--green { background: var(--green); }
+.dot--red { background: var(--red); }
+.direction-card--in strong { color: var(--green); }
+.direction-card--out strong { color: var(--red); }
+
+/* ---------- Confirm presence ---------- */
+.confirm-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.camera-box {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3/4;
+  background: #000;
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.camera-box video, .camera-box img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+.camera-msg {
+  position: absolute;
+  color: var(--red);
+  text-align: center;
+  padding: 0 20px;
+  font-size: 14px;
+  margin: 0;
+}
+.confirm-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.confirm-footer .status-ok { color: var(--green); }
+.confirm-footer .status-warn { color: var(--red); }
+
+/* ---------- Success ---------- */
+.success-box { text-align: center; padding-top: 20vh; }
+.success-icon { font-size: 56px; margin-bottom: 12px; }
+.success-box h2 { margin: 0 0 8px; }
+.success-box .muted { margin-bottom: 28px; }
+
+/* ---------- Admin login ---------- */
+.admin-login-box { padding-top: 8vh; max-width: 340px; margin: 0 auto; }
+.error-text { color: var(--red); font-size: 13px; margin: -6px 0 12px; }
+
+/* ---------- Admin dashboard ---------- */
+.tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+.tab-btn {
+  flex: 1;
+  padding: 10px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.tab-btn.is-active { background: var(--accent-dark); color: #fff; border-color: var(--accent-dark); }
+.tab-panel { display: none; }
+.tab-panel.is-active { display: block; }
+
+.filters { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.filters .text-input--sm { flex: 1; min-width: 120px; }
+
+.record-card {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  margin-bottom: 10px;
+}
+.record-thumb {
+  width: 56px; height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--bg-elevated);
+  flex-shrink: 0;
+}
+.record-info { flex: 1; min-width: 0; font-size: 13px; }
+.record-info .r-name { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+.record-info .r-line { color: var(--text-muted); }
+.record-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+  height: fit-content;
+  white-space: nowrap;
+}
+.record-badge--in { background: var(--green-bg); color: var(--green); }
+.record-badge--out { background: var(--red-bg); color: var(--red); }
+.record-info a { color: var(--accent); text-decoration: none; }
+
+.admin-add-row { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  padding: 12px 20px;
+  border-radius: 30px;
+  font-size: 14px;
+  z-index: 50;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+}
+.toast--error { border-color: var(--red); color: var(--red); }
+
+@media (max-width: 400px) {
+  .home-hero h1 { font-size: 34px; }
+}

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Ponto PROQUAL — Registo de Presença</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%23e8720c%22/><text x=%2250%22 y=%2266%22 font-size=%2255%22 font-family=%22Arial%22 font-weight=%22bold%22 fill=%22white%22 text-anchor=%22middle%22>P</text></svg>">
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <!-- ===================== HOME ===================== -->
+  <section class="screen" data-screen="home">
+    <div class="home-hero">
+      <div class="brand">
+        <div class="brand-mark">P</div>
+        <span class="brand-name">PONTO&nbsp;PROQUAL</span>
+      </div>
+      <h1 id="home-title">REGISTO DE<br/>PRESENÇA</h1>
+      <p class="muted" id="home-subtitle">Foto, hora e localização carimbadas no momento do registo.</p>
+    </div>
+
+    <div class="card-stack">
+      <button class="option-card option-card--primary" data-nav="employee-select">
+        <span class="option-icon">🧑‍💼</span>
+        <span class="option-text">
+          <strong>SOU FUNCIONÁRIO</strong>
+          <small>Marcar a minha presença</small>
+        </span>
+      </button>
+
+      <button class="option-card" data-nav="admin-login">
+        <span class="option-icon">🏢</span>
+        <span class="option-text">
+          <strong>GESTÃO</strong>
+          <small>Ver presenças, obras e escritório</small>
+        </span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ===================== EMPLOYEE: QUEM ÉS TU ===================== -->
+  <section class="screen" data-screen="employee-select">
+    <header class="screen-header">
+      <button class="back-btn" data-back="home">←</button>
+      <h2>QUEM ÉS TU?</h2>
+    </header>
+    <div class="list" id="employee-list"></div>
+    <button class="link-action" data-nav="employee-new">+ Novo funcionário</button>
+  </section>
+
+  <!-- ===================== EMPLOYEE: NOVO FUNCIONÁRIO ===================== -->
+  <section class="screen" data-screen="employee-new">
+    <header class="screen-header">
+      <button class="back-btn" data-back="employee-select">←</button>
+      <h2>QUEM ÉS TU?</h2>
+    </header>
+    <input class="text-input" id="new-employee-name" placeholder="Nome do funcionário" autocomplete="off" />
+    <select class="text-input" id="new-employee-dept">
+      <option value="Obra">Obra</option>
+      <option value="Escritório">Escritório</option>
+    </select>
+    <div class="btn-row">
+      <button class="btn btn--ghost" data-back="employee-select">Cancelar</button>
+      <button class="btn btn--accent" id="new-employee-continue">Continuar</button>
+    </div>
+  </section>
+
+  <!-- ===================== LOCATION: ONDE ESTÁS ===================== -->
+  <section class="screen" data-screen="location-select">
+    <header class="screen-header">
+      <button class="back-btn" data-back="employee-select">←</button>
+      <h2>ONDE ESTÁS?</h2>
+    </header>
+    <div class="list" id="location-list"></div>
+    <button class="link-action" data-nav="location-new">+ Novo local</button>
+  </section>
+
+  <!-- ===================== LOCATION: NOVO LOCAL ===================== -->
+  <section class="screen" data-screen="location-new">
+    <header class="screen-header">
+      <button class="back-btn" data-back="location-select">←</button>
+      <h2>ONDE ESTÁS?</h2>
+    </header>
+    <input class="text-input" id="new-location-name" placeholder="Nome da obra ou do escritório" autocomplete="off" />
+    <select class="text-input" id="new-location-type">
+      <option value="obra">Obra</option>
+      <option value="escritorio">Escritório</option>
+    </select>
+    <div class="btn-row">
+      <button class="btn btn--ghost" data-back="location-select">Cancelar</button>
+      <button class="btn btn--accent" id="new-location-continue">Continuar</button>
+    </div>
+  </section>
+
+  <!-- ===================== DIRECTION ===================== -->
+  <section class="screen" data-screen="direction-select">
+    <header class="screen-header">
+      <button class="back-btn" data-back="location-select">←</button>
+      <h2>ENTRADA OU SAÍDA?</h2>
+    </header>
+    <button class="direction-card direction-card--in" data-direction="entrada">
+      <span class="dot dot--green"></span>
+      <span class="option-text">
+        <strong>ENTRADA</strong>
+        <small id="entrada-desc">Estou a chegar</small>
+      </span>
+    </button>
+    <button class="direction-card direction-card--out" data-direction="saida">
+      <span class="dot dot--red"></span>
+      <span class="option-text">
+        <strong>SAÍDA</strong>
+        <small id="saida-desc">Estou a sair</small>
+      </span>
+    </button>
+  </section>
+
+  <!-- ===================== CONFIRM PRESENCE ===================== -->
+  <section class="screen" data-screen="confirm-presence">
+    <header class="screen-header">
+      <button class="back-btn" data-back="direction-select">←</button>
+      <h2>CONFIRMAR PRESENÇA</h2>
+    </header>
+    <div class="confirm-meta">
+      <span id="confirm-employee">👤 —</span>
+      <span id="confirm-location">📍 —</span>
+    </div>
+
+    <div class="camera-box">
+      <video id="camera-video" autoplay playsinline muted></video>
+      <canvas id="camera-canvas" hidden></canvas>
+      <img id="captured-photo" hidden alt="Foto capturada" />
+      <p class="camera-msg" id="camera-msg"></p>
+    </div>
+
+    <div class="confirm-footer">
+      <span id="confirm-time">🕒 —</span>
+      <span id="confirm-gps">📍 A obter localização…</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn--ghost" id="retake-photo-btn" hidden>Repetir foto</button>
+      <button class="btn btn--accent btn--wide" id="capture-btn">Tirar foto e registar</button>
+    </div>
+  </section>
+
+  <!-- ===================== SUCCESS ===================== -->
+  <section class="screen" data-screen="success">
+    <div class="success-box">
+      <div class="success-icon">✅</div>
+      <h2>Presença registada!</h2>
+      <p class="muted" id="success-summary">—</p>
+      <button class="btn btn--accent btn--wide" data-nav="home">Concluir</button>
+    </div>
+  </section>
+
+  <!-- ===================== ADMIN LOGIN ===================== -->
+  <section class="screen" data-screen="admin-login">
+    <header class="screen-header">
+      <button class="back-btn" data-back="home">←</button>
+      <h2>ENTRAR</h2>
+    </header>
+    <div class="admin-login-box">
+      <div class="brand-mark brand-mark--lg">🏢</div>
+      <input class="text-input" id="admin-email" type="email" placeholder="Email" autocomplete="username" />
+      <input class="text-input" id="admin-password" type="password" placeholder="Palavra-passe" autocomplete="current-password" />
+      <p class="error-text" id="admin-login-error" hidden></p>
+      <button class="btn btn--accent btn--wide" id="admin-login-btn">Entrar</button>
+    </div>
+  </section>
+
+  <!-- ===================== ADMIN DASHBOARD ===================== -->
+  <section class="screen" data-screen="admin-dashboard">
+    <header class="screen-header">
+      <button class="back-btn" data-back="home">←</button>
+      <h2>GESTÃO</h2>
+      <button class="link-action link-action--top" id="admin-logout-btn">Sair</button>
+    </header>
+
+    <div class="tabs">
+      <button class="tab-btn is-active" data-tab="records">Registos</button>
+      <button class="tab-btn" data-tab="employees">Funcionários</button>
+      <button class="tab-btn" data-tab="locations">Obras/Escritório</button>
+    </div>
+
+    <!-- Tab: Records -->
+    <div class="tab-panel is-active" data-tab-panel="records">
+      <div class="filters">
+        <select class="text-input text-input--sm" id="filter-location"><option value="">Todos os locais</option></select>
+        <select class="text-input text-input--sm" id="filter-employee"><option value="">Todos os funcionários</option></select>
+        <input class="text-input text-input--sm" id="filter-date" type="date" />
+      </div>
+      <div class="list" id="records-list"></div>
+    </div>
+
+    <!-- Tab: Employees -->
+    <div class="tab-panel" data-tab-panel="employees">
+      <div class="admin-add-row">
+        <input class="text-input" id="admin-new-employee-name" placeholder="Nome do funcionário" />
+        <select class="text-input" id="admin-new-employee-dept">
+          <option value="Obra">Obra</option>
+          <option value="Escritório">Escritório</option>
+        </select>
+        <button class="btn btn--accent" id="admin-add-employee-btn">Adicionar</button>
+      </div>
+      <div class="list" id="admin-employee-list"></div>
+    </div>
+
+    <!-- Tab: Locations -->
+    <div class="tab-panel" data-tab-panel="locations">
+      <div class="admin-add-row">
+        <input class="text-input" id="admin-new-location-name" placeholder="Nome da obra ou escritório" />
+        <select class="text-input" id="admin-new-location-type">
+          <option value="obra">Obra</option>
+          <option value="escritorio">Escritório</option>
+        </select>
+        <button class="btn btn--accent" id="admin-add-location-btn">Adicionar</button>
+      </div>
+      <div class="list" id="admin-location-list"></div>
+    </div>
+  </section>
+
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
