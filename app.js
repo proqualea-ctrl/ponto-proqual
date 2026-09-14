@@ -24,9 +24,10 @@
     duplicateWarning: null,
     session: null, // sessão de auth da Gestão
     role: null,    // 'admin' | 'encarregado' | null
-    dashboard: { records: [], employees: [], locations: [] },
+    dashboard: { records: [], employees: [], locations: [], absences: [] },
     installPromptEvent: null,
     editingRecordId: null,
+    flowMode: "presence", // 'presence' | 'absence' — decide o que acontece depois de escolher o funcionário
   };
 
   // -----------------------------------------------------------
@@ -52,15 +53,24 @@
       el.classList.toggle("is-active", el.dataset.screen === name);
     });
     if (name !== "confirm-presence") stopCamera();
-    if (name === "employee-select") renderEmployeeList();
+    if (name === "employee-select") {
+      const title = document.getElementById("employee-select-title");
+      if (title) title.textContent = state.flowMode === "absence" ? "QUEM PRECISA DE JUSTIFICAR?" : "QUEM ÉS TU?";
+      renderEmployeeList();
+    }
     if (name === "location-select") renderLocationList();
     if (name === "confirm-presence") enterConfirmScreen();
+    if (name === "absence-new") enterAbsenceScreen();
     if (name === "admin-dashboard") loadDashboard();
   }
 
   document.addEventListener("click", (e) => {
     const nav = e.target.closest("[data-nav]");
-    if (nav) { showScreen(nav.dataset.nav); return; }
+    if (nav) {
+      if (nav.dataset.flow) state.flowMode = nav.dataset.flow;
+      showScreen(nav.dataset.nav);
+      return;
+    }
     const back = e.target.closest("[data-back]");
     if (back) { showScreen(back.dataset.back); return; }
     const dirBtn = e.target.closest("[data-direction]");
@@ -182,7 +192,7 @@
         `;
         btn.addEventListener("click", () => {
           state.selectedEmployee = emp;
-          showScreen("location-select");
+          showScreen(state.flowMode === "absence" ? "absence-new" : "location-select");
         });
         box.appendChild(btn);
       });
@@ -202,7 +212,7 @@
     if (error) { console.error(error); toast("Não foi possível criar o funcionário", true); return; }
     nameInput.value = "";
     state.selectedEmployee = data;
-    showScreen("location-select");
+    showScreen(state.flowMode === "absence" ? "absence-new" : "location-select");
   });
 
   // -----------------------------------------------------------
@@ -501,6 +511,89 @@
   }
 
   // -----------------------------------------------------------
+  // Justificar falta: o funcionário pede, a Gestão aprova/rejeita
+  // -----------------------------------------------------------
+  function todayDateValue() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
+  function enterAbsenceScreen() {
+    document.getElementById("absence-employee").textContent = "👤 " + (state.selectedEmployee?.name || "—");
+    document.getElementById("absence-date").value = todayDateValue();
+    document.getElementById("absence-reason").value = "doenca";
+    document.getElementById("absence-note").value = "";
+    const photoInput = document.getElementById("absence-photo");
+    photoInput.value = "";
+    const preview = document.getElementById("absence-photo-preview");
+    preview.hidden = true;
+    preview.src = "";
+  }
+
+  function absenceReasonLabel(reason) {
+    const labels = { doenca: "Doença", licenca: "Licença", pessoal: "Motivo pessoal", outro: "Outro" };
+    return labels[reason] || "Outro";
+  }
+
+  document.getElementById("absence-photo").addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    const preview = document.getElementById("absence-photo-preview");
+    if (file) {
+      preview.src = URL.createObjectURL(file);
+      preview.hidden = false;
+    } else {
+      preview.hidden = true;
+      preview.src = "";
+    }
+  });
+
+  document.getElementById("absence-submit-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("absence-submit-btn");
+    const dateInput = document.getElementById("absence-date");
+    const reasonInput = document.getElementById("absence-reason");
+    const noteInput = document.getElementById("absence-note");
+    const photoFile = document.getElementById("absence-photo").files[0] || null;
+    if (!dateInput.value) { toast("Indica a data da falta", true); return; }
+    if (!state.selectedEmployee) { toast("Escolhe primeiro o funcionário", true); return; }
+
+    btn.disabled = true;
+    btn.textContent = "A enviar…";
+    try {
+      let photoPath = null;
+      if (photoFile) {
+        const safeName = photoFile.name.replace(/[^a-zA-Z0-9.]/g, "_");
+        const fileName = `faltas/${state.selectedEmployee.id}/${Date.now()}-${safeName}`;
+        const { error: upErr } = await supabase.storage
+          .from(cfg.STORAGE_BUCKET)
+          .upload(fileName, photoFile, { contentType: photoFile.type || "image/jpeg" });
+        if (upErr) throw upErr;
+        photoPath = fileName;
+      }
+
+      const { error } = await supabase.from("absence_requests").insert({
+        employee_id: state.selectedEmployee.id,
+        absence_date: dateInput.value,
+        reason: reasonInput.value,
+        note: noteInput.value.trim() || null,
+        photo_path: photoPath,
+      });
+      if (error) throw error;
+
+      const when = new Date(dateInput.value + "T00:00:00").toLocaleDateString("pt-PT");
+      document.getElementById("success-summary").textContent =
+        `${state.selectedEmployee.name} — falta de ${when} (${absenceReasonLabel(reasonInput.value)}) enviada para aprovação da Gestão`;
+      showScreen("success");
+    } catch (err) {
+      console.error(err);
+      toast("Não foi possível enviar o pedido. Tenta novamente.", true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Enviar pedido";
+    }
+  });
+
+  // -----------------------------------------------------------
   // Gestão: login
   // -----------------------------------------------------------
   document.getElementById("admin-login-btn").addEventListener("click", async () => {
@@ -578,6 +671,7 @@
       renderAdminLocationList();
     }
     renderRecordsList(state.dashboard.records || []);
+    renderAbsenceList(state.dashboard.absences || []);
   }
 
   // -----------------------------------------------------------
@@ -615,6 +709,7 @@
     fillSelect("filter-location", state.dashboard.locations, "Todos os locais");
     applyRoleUI();
     await loadRecords();
+    await loadAbsenceRequests();
     await loadMonthlySummary();
   }
 
@@ -787,6 +882,98 @@
   ["filter-employee", "filter-location", "filter-date"].forEach((id) => {
     document.getElementById(id).addEventListener("change", loadRecords);
   });
+
+  // -----------------------------------------------------------
+  // Gestão: pedidos de justificação de falta
+  // -----------------------------------------------------------
+  async function loadAbsenceRequests() {
+    const box = document.getElementById("absence-list");
+    if (box) box.innerHTML = '<p class="list-empty">A carregar…</p>';
+
+    const { data, error } = await supabase
+      .from("absence_requests")
+      .select("*, employees(name, department)")
+      .order("created_at", { ascending: false })
+      .limit(300);
+    if (error) { console.error(error); if (box) box.innerHTML = '<p class="list-empty">Erro ao carregar faltas.</p>'; return; }
+
+    state.dashboard.absences = data || [];
+    renderAbsenceList(state.dashboard.absences);
+  }
+
+  function renderAbsenceList(data) {
+    const box = document.getElementById("absence-list");
+    if (!box) return;
+
+    const tabBtn = document.querySelector('[data-tab="faltas"]');
+    if (tabBtn) {
+      const pending = data.filter((r) => r.status === "pendente").length;
+      tabBtn.textContent = pending ? `Faltas (${pending})` : "Faltas";
+    }
+
+    if (!data.length) { box.innerHTML = '<p class="list-empty">Sem pedidos de justificação de falta.</p>'; return; }
+
+    const statusBadges = {
+      pendente: `<span class="review-badge review-badge--pendente">⏳ Pendente</span>`,
+      aprovado: `<span class="review-badge review-badge--aprovado">✅ Aprovado</span>`,
+      rejeitado: `<span class="review-badge review-badge--rejeitado">❌ Rejeitado</span>`,
+    };
+
+    box.innerHTML = "";
+    data.forEach((req) => {
+      const when = new Date(req.absence_date + "T00:00:00").toLocaleDateString("pt-PT");
+      const noteTag = req.note ? `<div class="r-line">📝 ${escapeHtml(req.note)}</div>` : "";
+      const photo = req.photo_path
+        ? `<a href="${publicPhotoUrl(req.photo_path)}" target="_blank" rel="noopener"><img class="record-thumb" src="${publicPhotoUrl(req.photo_path)}" alt="" /></a>`
+        : `<div class="record-thumb"></div>`;
+      const div = document.createElement("div");
+      div.className = "record-card";
+      div.innerHTML = `
+        ${photo}
+        <div class="record-info">
+          <div class="r-name">${escapeHtml(req.employees?.name || "—")}</div>
+          <div class="r-line">📅 ${when} · ${absenceReasonLabel(req.reason)}</div>
+          ${noteTag}
+          <div class="r-line">${statusBadges[req.status] || ""}</div>
+        </div>
+        ${isAdmin() ? `
+        <div class="record-actions">
+          ${req.status === "pendente" ? `
+          <button class="approve" data-approve-absence="${req.id}">✅ Aprovar</button>
+          <button class="danger" data-reject-absence="${req.id}">❌ Rejeitar</button>` : ""}
+          <button class="danger" data-delete-absence="${req.id}">🗑 Apagar</button>
+        </div>` : ""}
+      `;
+      box.appendChild(div);
+    });
+  }
+
+  document.getElementById("absence-list").addEventListener("click", (e) => {
+    const approveBtn = e.target.closest("[data-approve-absence]");
+    if (approveBtn) { setAbsenceStatus(approveBtn.dataset.approveAbsence, "aprovado"); return; }
+    const rejectBtn = e.target.closest("[data-reject-absence]");
+    if (rejectBtn) { setAbsenceStatus(rejectBtn.dataset.rejectAbsence, "rejeitado"); return; }
+    const delBtn = e.target.closest("[data-delete-absence]");
+    if (delBtn) { deleteAbsence(delBtn.dataset.deleteAbsence); return; }
+  });
+
+  async function setAbsenceStatus(requestId, status) {
+    const { error } = await supabase
+      .from("absence_requests")
+      .update({ status, reviewed_at: new Date().toISOString() })
+      .eq("id", requestId);
+    if (error) { console.error(error); toast("Não foi possível atualizar o pedido", true); return; }
+    toast(status === "aprovado" ? "Falta aprovada" : "Falta rejeitada");
+    loadAbsenceRequests();
+  }
+
+  async function deleteAbsence(requestId) {
+    if (!window.confirm("Apagar este pedido de justificação de falta?")) return;
+    const { error } = await supabase.from("absence_requests").delete().eq("id", requestId);
+    if (error) { console.error(error); toast("Não foi possível apagar o pedido", true); return; }
+    toast("Pedido apagado");
+    loadAbsenceRequests();
+  }
 
   // -----------------------------------------------------------
   // Gestão: CRUD simples de funcionários e locais

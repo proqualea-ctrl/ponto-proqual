@@ -2,7 +2,7 @@
 // Faz cache só da casca da aplicação (HTML/CSS/JS/ícones), nunca dos
 // pedidos ao Supabase — esses vão sempre à rede, para os dados serem
 // sempre atuais.
-const CACHE_NAME = "ponto-proqual-shell-v1";
+const CACHE_NAME = "ponto-proqual-shell-v2";
 const SHELL_FILES = [
   "./",
   "./index.html",

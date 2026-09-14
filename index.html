@@ -31,11 +31,19 @@
     </div>
 
     <div class="card-stack">
-      <button class="option-card option-card--primary" data-nav="employee-select">
+      <button class="option-card option-card--primary" data-nav="employee-select" data-flow="presence">
         <span class="option-icon">🧑‍💼</span>
         <span class="option-text">
           <strong>SOU FUNCIONÁRIO</strong>
           <small>Marcar a minha presença</small>
+        </span>
+      </button>
+
+      <button class="option-card" data-nav="employee-select" data-flow="absence">
+        <span class="option-icon">🗓️</span>
+        <span class="option-text">
+          <strong>JUSTIFICAR FALTA</strong>
+          <small>Pedir aprovação de uma ausência</small>
         </span>
       </button>
 
@@ -55,7 +63,7 @@
   <section class="screen" data-screen="employee-select">
     <header class="screen-header">
       <button class="back-btn" data-back="home">←</button>
-      <h2>QUEM ÉS TU?</h2>
+      <h2 id="employee-select-title">QUEM ÉS TU?</h2>
     </header>
     <div class="list" id="employee-list"></div>
     <button class="link-action" data-nav="employee-new">+ Novo funcionário</button>
@@ -86,6 +94,35 @@
     </header>
     <div class="list" id="location-list"></div>
     <p class="muted" style="font-size:13px;">Não encontras o teu local? Pede à Gestão para o adicionar.</p>
+  </section>
+
+  <!-- ===================== JUSTIFICAR FALTA ===================== -->
+  <section class="screen" data-screen="absence-new">
+    <header class="screen-header">
+      <button class="back-btn" data-back="employee-select">←</button>
+      <h2>JUSTIFICAR FALTA</h2>
+    </header>
+    <div class="confirm-meta">
+      <span id="absence-employee">👤 —</span>
+    </div>
+    <label class="muted" style="font-size:13px; display:block; margin-bottom:6px;" for="absence-date">Data da falta</label>
+    <input class="text-input" id="absence-date" type="date" />
+    <label class="muted" style="font-size:13px; display:block; margin-bottom:6px;" for="absence-reason">Motivo</label>
+    <select class="text-input" id="absence-reason">
+      <option value="doenca">Doença</option>
+      <option value="licenca">Licença</option>
+      <option value="pessoal">Motivo pessoal</option>
+      <option value="outro">Outro</option>
+    </select>
+    <textarea class="text-input" id="absence-note" rows="3" placeholder="Detalhes (opcional) — ex: consulta médica, atestado, etc."></textarea>
+    <label class="muted" style="font-size:13px; display:block; margin-bottom:6px;" for="absence-photo">Foto (opcional) — ex: atestado médico</label>
+    <input class="text-input file-input" id="absence-photo" type="file" accept="image/*" capture="environment" />
+    <img id="absence-photo-preview" class="absence-photo-preview" alt="Pré-visualização da foto" hidden />
+    <p class="muted" style="font-size:13px;">Este pedido fica pendente até a Gestão aprovar ou rejeitar.</p>
+    <div class="btn-row">
+      <button class="btn btn--ghost" data-back="employee-select">Cancelar</button>
+      <button class="btn btn--accent" id="absence-submit-btn">Enviar pedido</button>
+    </div>
   </section>
 
   <!-- ===================== DIRECTION ===================== -->
@@ -182,6 +219,7 @@
     <div class="tabs">
       <button class="tab-btn is-active" data-tab="records">Registos</button>
       <button class="tab-btn" data-tab="resumo">Resumo</button>
+      <button class="tab-btn" data-tab="faltas">Faltas</button>
       <button class="tab-btn" data-tab="employees">Funcionários</button>
       <button class="tab-btn" data-tab="locations">Obras/Escritório</button>
     </div>
@@ -203,6 +241,11 @@
         <input class="text-input text-input--sm" id="resumo-month" type="month" />
       </div>
       <div class="list" id="resumo-list"></div>
+    </div>
+
+    <!-- Tab: Faltas -->
+    <div class="tab-panel" data-tab-panel="faltas">
+      <div class="list" id="absence-list"></div>
     </div>
 
     <!-- Tab: Employees -->

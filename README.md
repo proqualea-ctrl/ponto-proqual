@@ -50,6 +50,15 @@ projeto que já está a funcionar. Não é preciso recomeçar do zero.
     o botão "+ Novo local"; ele só escolhe entre os locais que a Gestão já
     criou (isto já estava protegido na base de dados, agora também está
     refletido na interface).
+11. **Justificação de faltas** — novo botão no ecrã inicial, "JUSTIFICAR
+    FALTA": o funcionário escolhe o seu nome, indica a data, o motivo
+    (Doença, Licença, Motivo pessoal, Outro), pode escrever uma nota e
+    anexar uma **foto** (ex: atestado médico, tirada na hora ou escolhida
+    da galeria). O pedido fica **"⏳ Pendente"** até a Gestão o **Aprovar**
+    ou **Rejeitar** na nova tab **"Faltas"** (só administradores decidem; o
+    número entre parênteses no separador mostra quantos pedidos estão por
+    rever, e a foto anexada aparece em miniatura, clicável para ver em
+    tamanho grande).
 
 ---
 
@@ -64,9 +73,10 @@ preciso apagar nada**. Só falta acrescentar as tabelas/colunas novas:
    clica **Run**
 
 Isto acrescenta: colunas de geofencing em `locations` e `attendance_records`,
-a tabela `admin_profiles` (níveis de acesso), e atualiza as permissões para
-só o `admin` poder editar/apagar. Podes correr este ficheiro mais do que uma
-vez sem problema (não duplica nada).
+a tabela `admin_profiles` (níveis de acesso), a tabela `absence_requests`
+(justificação de faltas), e atualiza as permissões para só o `admin` poder
+editar/apagar. Podes correr este ficheiro mais do que uma vez sem problema
+(não duplica nada).
 
 > Se um dia precisares de criar o projeto Supabase **de raiz** (ex: para uma
 > filial nova), usa antes o [`schema.sql`](./schema.sql) completo — já inclui
@@ -155,6 +165,30 @@ tipo, o registo fica marcado como **pendente** até a Gestão o rever: em
 **"❌ Rejeitar"** (só para administradores). Um registo rejeitado fica
 identificado como tal e não entra na contagem de horas do Resumo mensal.
 
+### Justificar uma falta (funcionário que não compareceu)
+
+Diferente do "Serviço Externo" (que é para quem esteve fora do local
+habitual mas trabalhou na mesma), isto é para o dia em que o funcionário
+**não esteve presente de todo** — doença, licença, ou qualquer outro
+motivo:
+
+1. No ecrã inicial da app, o funcionário toca em **"JUSTIFICAR FALTA"**
+   (em vez de "SOU FUNCIONÁRIO").
+2. Escolhe o seu nome na lista, tal como faria para marcar presença.
+3. Indica a **data da falta**, escolhe o **motivo** (Doença, Licença,
+   Motivo pessoal ou Outro), pode escrever uma nota com mais detalhe e,
+   se quiser, anexar uma **foto** (ex: atestado médico) — o botão de
+   escolher ficheiro abre a câmara do telemóvel ou a galeria, conforme o
+   funcionário preferir. Não é obrigatório, mas ajuda a Gestão a decidir
+   mais depressa.
+4. Envia o pedido — não precisa de GPS, porque não esteve em lado nenhum
+   a marcar.
+
+O pedido fica **"⏳ Pendente"**. Em **Gestão → Faltas** (novo separador),
+cada pedido pendente aparece com os botões **"✅ Aprovar"** e **"❌
+Rejeitar"** (só administradores) — o número entre parênteses no nome do
+separador mostra sempre quantos pedidos ainda estão por decidir.
+
 ## 2. Atualizar os ficheiros do site (GitHub Pages)
 
 O site está publicado a partir do repositório GitHub
@@ -189,9 +223,14 @@ subpastas). Para atualizar:
 3. Testa o fluxo normal (**SOU FUNCIONÁRIO** → escolher/criar → **Entrada**
    ou **Saída** → foto → confirmar) e confirma que aparece o aviso de
    localização se estiveres longe do local escolhido.
-4. Entra em **GESTÃO** com a tua conta e confirma:
+4. Testa também **"JUSTIFICAR FALTA"** a partir do ecrã inicial: escolhe um
+   funcionário, indica data e motivo, envia — deve aparecer uma mensagem a
+   confirmar que ficou pendente de aprovação.
+5. Entra em **GESTÃO** com a tua conta e confirma:
    - o crachá ao lado de "GESTÃO" mostra "Administrador" ou "Encarregado";
    - a tab **Resumo** mostra horas por funcionário no mês atual;
+   - a tab **Faltas** mostra o pedido que acabaste de enviar como
+     "⏳ Pendente", e (se fores admin) consegues **Aprovar**/**Rejeitar**;
    - o botão **Exportar para Excel** descarrega um `.xlsx`;
    - (se fores admin) consegues **Editar**/**Apagar** um registo.
 

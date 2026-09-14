@@ -91,6 +91,26 @@ create table if not exists public.admin_profiles (
 );
 
 -- -------------------------------------------------------------
+-- Tabela: absence_requests (justificação de faltas)
+-- O funcionário pede pela app (sem login); fica "pendente" até a
+-- Gestão (só admin) aprovar ou rejeitar — mesma lógica do Serviço
+-- Externo, mas para dias em que o funcionário não compareceu.
+-- -------------------------------------------------------------
+create table if not exists public.absence_requests (
+  id uuid primary key default gen_random_uuid(),
+  employee_id uuid not null references public.employees(id) on delete restrict,
+  absence_date date not null,
+  reason text not null default 'outro' check (reason in ('doenca', 'licenca', 'pessoal', 'outro')),
+  note text,
+  photo_path text,           -- caminho no bucket "presencas-fotos" (ex: foto de um atestado médico)
+  status text not null default 'pendente' check (status in ('pendente', 'aprovado', 'rejeitado')),
+  created_at timestamptz not null default now(),
+  reviewed_at timestamptz
+);
+
+create index if not exists idx_absence_employee on public.absence_requests(employee_id);
+
+-- -------------------------------------------------------------
 -- Row Level Security
 -- Regra geral do projeto:
 --  - Qualquer pessoa com o link da app pode LER locais/funcionários ativos
@@ -106,6 +126,7 @@ alter table public.locations enable row level security;
 alter table public.employees enable row level security;
 alter table public.attendance_records enable row level security;
 alter table public.admin_profiles enable row level security;
+alter table public.absence_requests enable row level security;
 
 -- locations
 create policy "locations_select_public" on public.locations
@@ -154,6 +175,20 @@ create policy "attendance_delete_admin" on public.attendance_records
 -- admin_profiles: cada um só vê o seu próprio papel
 create policy "admin_profiles_select_own" on public.admin_profiles
   for select to authenticated using (auth.uid() = id);
+
+-- absence_requests
+create policy "absence_insert_public" on public.absence_requests
+  for insert to anon, authenticated with check (true);
+create policy "absence_select_auth" on public.absence_requests
+  for select to authenticated using (true);
+create policy "absence_update_admin" on public.absence_requests
+  for update to authenticated using (
+    exists (select 1 from public.admin_profiles where id = auth.uid() and role = 'admin')
+  );
+create policy "absence_delete_admin" on public.absence_requests
+  for delete to authenticated using (
+    exists (select 1 from public.admin_profiles where id = auth.uid() and role = 'admin')
+  );
 
 -- -------------------------------------------------------------
 -- Storage: bucket para as fotos de presença

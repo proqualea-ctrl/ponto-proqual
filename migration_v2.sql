@@ -81,12 +81,14 @@ on conflict (id) do update set role = 'admin';
 
 -- locations
 drop policy if exists "locations_update_auth" on public.locations;
+drop policy if exists "locations_update_admin" on public.locations;
 create policy "locations_update_admin" on public.locations
   for update to authenticated using (
     exists (select 1 from public.admin_profiles where id = auth.uid() and role = 'admin')
   );
 
 drop policy if exists "locations_delete_auth" on public.locations;
+drop policy if exists "locations_delete_admin" on public.locations;
 create policy "locations_delete_admin" on public.locations
   for delete to authenticated using (
     exists (select 1 from public.admin_profiles where id = auth.uid() and role = 'admin')
@@ -94,12 +96,14 @@ create policy "locations_delete_admin" on public.locations
 
 -- employees
 drop policy if exists "employees_update_auth" on public.employees;
+drop policy if exists "employees_update_admin" on public.employees;
 create policy "employees_update_admin" on public.employees
   for update to authenticated using (
     exists (select 1 from public.admin_profiles where id = auth.uid() and role = 'admin')
   );
 
 drop policy if exists "employees_delete_auth" on public.employees;
+drop policy if exists "employees_delete_admin" on public.employees;
 create policy "employees_delete_admin" on public.employees
   for delete to authenticated using (
     exists (select 1 from public.admin_profiles where id = auth.uid() and role = 'admin')
@@ -107,6 +111,7 @@ create policy "employees_delete_admin" on public.employees
 
 -- attendance_records: agora também dá para editar (update), só admin
 drop policy if exists "attendance_delete_auth" on public.attendance_records;
+drop policy if exists "attendance_delete_admin" on public.attendance_records;
 create policy "attendance_delete_admin" on public.attendance_records
   for delete to authenticated using (
     exists (select 1 from public.admin_profiles where id = auth.uid() and role = 'admin')
@@ -122,3 +127,47 @@ create policy "attendance_update_admin" on public.attendance_records
 -- admin_profiles é tratado como "encarregado" (só vê, não gere) —
 -- a app também aplica esta regra visualmente, escondendo os botões
 -- de gerir/editar/apagar para quem não é admin.
+
+-- -------------------------------------------------------------
+-- 5) Justificação de faltas: o funcionário pede pela app (sem
+--    login), fica "pendente" e só a Gestão (admin) aprova/rejeita —
+--    a mesma lógica já usada para o "Serviço Externo".
+-- -------------------------------------------------------------
+create table if not exists public.absence_requests (
+  id uuid primary key default gen_random_uuid(),
+  employee_id uuid not null references public.employees(id) on delete restrict,
+  absence_date date not null,
+  reason text not null default 'outro' check (reason in ('doenca', 'licenca', 'pessoal', 'outro')),
+  note text,
+  status text not null default 'pendente' check (status in ('pendente', 'aprovado', 'rejeitado')),
+  created_at timestamptz not null default now(),
+  reviewed_at timestamptz
+);
+
+-- Foto opcional (ex: atestado médico) — caso já tenhas corrido uma versão
+-- anterior desta secção sem esta coluna, isto acrescenta-a sem apagar nada.
+alter table public.absence_requests add column if not exists photo_path text;
+
+create index if not exists idx_absence_employee on public.absence_requests(employee_id);
+
+alter table public.absence_requests enable row level security;
+
+drop policy if exists "absence_insert_public" on public.absence_requests;
+create policy "absence_insert_public" on public.absence_requests
+  for insert to anon, authenticated with check (true);
+
+drop policy if exists "absence_select_auth" on public.absence_requests;
+create policy "absence_select_auth" on public.absence_requests
+  for select to authenticated using (true);
+
+drop policy if exists "absence_update_admin" on public.absence_requests;
+create policy "absence_update_admin" on public.absence_requests
+  for update to authenticated using (
+    exists (select 1 from public.admin_profiles where id = auth.uid() and role = 'admin')
+  );
+
+drop policy if exists "absence_delete_admin" on public.absence_requests;
+create policy "absence_delete_admin" on public.absence_requests
+  for delete to authenticated using (
+    exists (select 1 from public.admin_profiles where id = auth.uid() and role = 'admin')
+  );
