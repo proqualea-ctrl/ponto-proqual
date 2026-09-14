@@ -1,117 +1,177 @@
-# Ponto PROQUAL — Registo de Presença
+# Ponto PROQUAL — Registo de Presença (v2)
 
-Aplicação web (sem instalação, funciona em qualquer telemóvel/computador com
-browser) igual em funcionamento ao "Ponto de Obra" original, mas:
+Aplicação web de registo de presença da **PROQUAL Engenheiros e Associados,
+Lda** — serve tanto as **obras** como o **escritório**: qualquer funcionário
+regista a sua entrada/saída no mesmo sítio, com **foto**, **hora** e
+**localização (GPS)** carimbadas no momento.
 
-- serve **obras** *e* **escritório** — qualquer funcionário (de obra ou
-  administrativo) regista a sua entrada/saída no mesmo sítio;
-- cada registo fica com **foto**, **hora** e **localização (GPS)** carimbadas;
-- tem uma área de **Gestão** (com login) para a PROQUAL ver todos os registos,
-  filtrar por funcionário/local/dia, e gerir a lista de funcionários e locais.
+- Site já em produção em: **https://proqualea-ctrl.github.io/ponto-proqual/**
+- Backend (base de dados, autenticação, fotos): projeto Supabase `ponto-proqual`
+  (`https://jvmrsgrfkfafueyfqziy.supabase.co`)
 
-Não tem build step — é HTML/CSS/JS simples. A base de dados, autenticação e
-armazenamento de fotos usam o [Supabase](https://supabase.com) (tem plano
-gratuito, suficiente para começar).
+Este documento descreve as **novidades da versão 2** e como as ativar no
+projeto que já está a funcionar. Não é preciso recomeçar do zero.
 
 ---
 
-## 1. Criar o backend (Supabase) — 10 minutos
+## Novidades desta versão
 
-1. Cria uma conta grátis em **https://supabase.com** e um novo projeto
-   (escolhe uma password forte para a base de dados — guarda-a nas tuas
-   notas, não é a mesma coisa que as contas dos funcionários).
-2. No painel do projeto, vai a **SQL Editor → New query**, cola o conteúdo
-   do ficheiro [`supabase/schema.sql`](./supabase/schema.sql) e clica **Run**.
-   Isto cria as tabelas (`employees`, `locations`, `attendance_records`), o
-   armazenamento das fotos, e as regras de acesso.
-3. Vai a **Authentication → Users → Add user** e cria uma conta (email +
-   password) para cada pessoa da PROQUAL que vai usar a área de **Gestão**
-   (ex: `gestao@proqual.co.mz`). Estas são as únicas contas com login — os
-   funcionários que só marcam presença não precisam de conta.
-4. Vai a **Project Settings → API** e copia:
-   - o **Project URL**
-   - a chave **anon public**
+1. **Marca própria** — logótipo real da PROQUAL em vez do texto/placeholder,
+   cores da app alinhadas com a identidade da empresa.
+2. **App instalável (PWA)** — no telemóvel aparece um botão "Instalar a app
+   neste telemóvel" no ecrã inicial; depois de instalada, abre como uma app
+   normal (ícone no ecrã principal, sem barra de endereço).
+3. **Validação de localização (geofencing)** — cada obra/escritório pode ter
+   coordenadas GPS e um raio definidos; se o funcionário estiver longe desse
+   raio no momento do registo, aparece um aviso (o registo continua a ser
+   feito, mas fica assinalado para a Gestão).
+4. **Aviso de registos duplicados** — se um funcionário tentar marcar
+   "Entrada" quando já tem uma entrada sem saída correspondente (ou
+   vice-versa), aparece um aviso antes de confirmar.
+5. **Exportar para Excel** — na área de Gestão, tab "Registos", botão
+   "Exportar para Excel" gera um ficheiro `.xlsx` com os registos filtrados.
+6. **Resumo mensal por funcionário** — novo separador "Resumo" com o total
+   de horas e dias trabalhados por funcionário, num mês à escolha.
+7. **Editar/apagar registos** — cada registo tem agora botões "Editar" e
+   "Apagar" (só visíveis para administradores) para corrigir enganos.
+8. **Dois níveis de acesso na Gestão**:
+   - **admin** — acesso total (gerir funcionários/locais, editar/apagar
+     registos, tudo o resto).
+   - **encarregado** — só vê registos, resumo e exporta; não pode gerir
+     funcionários/locais nem editar/apagar registos.
 
-## 2. Ligar a app ao Supabase
+---
 
-Abre o ficheiro [`js/config.js`](./js/config.js) e substitui:
+## 1. Atualizar a base de dados (Supabase) — 2 minutos
 
-```js
-SUPABASE_URL: "https://SEU-PROJETO.supabase.co",
-SUPABASE_ANON_KEY: "SUA-CHAVE-ANON-PUBLICA",
-```
+O projeto Supabase (`ponto-proqual`) já existe e já tem dados — **não é
+preciso apagar nada**. Só falta acrescentar as tabelas/colunas novas:
 
-pelos valores que copiaste no passo anterior. Podes também ajustar
-`COMPANY_NAME`, `APP_TITLE` e `APP_SUBTITLE` nesse mesmo ficheiro.
+1. Entra em **https://supabase.com/dashboard/project/jvmrsgrfkfafueyfqziy**
+2. Vai a **SQL Editor → New query**
+3. Cola o conteúdo do ficheiro [`migration_v2.sql`](./migration_v2.sql) e
+   clica **Run**
 
-> A chave "anon public" é segura para ficar no código do site — é a chave
-> pensada para correr no browser do utilizador. As regras de acesso (quem
-> pode ler/escrever o quê) estão definidas no `schema.sql`, não nesta chave.
+Isto acrescenta: colunas de geofencing em `locations` e `attendance_records`,
+a tabela `admin_profiles` (níveis de acesso), e atualiza as permissões para
+só o `admin` poder editar/apagar. Podes correr este ficheiro mais do que uma
+vez sem problema (não duplica nada).
 
-## 3. Publicar no Netlify (tal como o site original)
+> Se um dia precisares de criar o projeto Supabase **de raiz** (ex: para uma
+> filial nova), usa antes o [`schema.sql`](./schema.sql) completo — já inclui
+> tudo o que o `migration_v2.sql` acrescenta.
 
-**Opção mais simples — arrastar a pasta:**
+### Definir quem é "admin"
 
-1. Vai a **https://app.netlify.com/drop**
-2. Arrasta a pasta `proqual-ponto` inteira para a página
-3. Pronto — o Netlify dá-te um link (podes depois mudar o nome do site em
-   *Site settings → Change site name*, ou associar um domínio próprio como
-   `ponto.proqual.co.mz`)
+O script já promove automaticamente `proqual.ea@gmail.com` a **admin**. Para
+dar acesso de **encarregado** a outra pessoa:
 
-**Opção com Git (recomendada a prazo, permite atualizações fáceis):**
+1. **Authentication → Users → Add user** — cria a conta dela normalmente
+   (com "Auto Confirm User" ligado, para não depender de email).
+2. **SQL Editor**, corre:
+   ```sql
+   insert into public.admin_profiles (id, role)
+   select id, 'encarregado' from auth.users where email = 'email-da-pessoa@exemplo.com'
+   on conflict (id) do update set role = 'encarregado';
+   ```
+   (troca `'encarregado'` por `'admin'` se quiseres dar-lhe acesso total.)
 
-1. Cria um repositório novo no GitHub e envia estes ficheiros para lá
-2. Em Netlify: **Add new site → Import an existing project → GitHub** →
-   escolhe o repositório
-3. Não é preciso "build command" nem "publish directory" especiais — é um
-   site estático simples (publish directory: `.` / raiz do projeto)
+Uma conta de Gestão sem linha em `admin_profiles` é tratada como
+"encarregado" por defeito.
 
-## 4. Testar
+### Dar coordenadas GPS a uma obra/escritório existente
 
-1. Abre o link do site num telemóvel (a câmara e o GPS só funcionam por
-   HTTPS — o Netlify já serve tudo em HTTPS automaticamente).
-2. Escolhe **SOU FUNCIONÁRIO** → cria o teu nome → escolhe **Obra** ou
-   **Escritório** → **Entrada** → autoriza a câmara e a localização → tira a
-   foto → confirma.
-3. Volta ao ecrã inicial, escolhe **GESTÃO**, entra com a conta criada no
-   passo 1.3, e confirma que o registo aparece na lista com a foto, hora e
-   link para o mapa.
+Sem coordenadas, essa localização simplesmente não tem aviso de geofencing
+(continua a funcionar normalmente). Para ativar, na área de Gestão → tab
+**Obras/Escritório**, ao criar um local novo usa o botão **"📍 Usar
+localização atual"** estando fisicamente no local — ou edita a linha
+diretamente na tabela `locations` no Supabase (colunas `latitude`,
+`longitude`, `radius_m`).
+
+## 2. Atualizar os ficheiros do site (GitHub Pages)
+
+O site está publicado a partir do repositório GitHub
+`proqualea-ctrl/ponto-proqual`, com todos os ficheiros na raiz (sem
+subpastas). Para atualizar:
+
+1. Abre o repositório em **https://github.com/proqualea-ctrl/ponto-proqual**
+2. Para cada ficheiro deste pacote, usa **Add file → Upload files** (ou edita
+   cada um individualmente) e substitui o ficheiro existente pelo novo:
+   - `index.html`, `style.css`, `app.js` — obrigatório substituir
+   - `manifest.json`, `sw.js` — ficheiros novos (PWA)
+   - `logo.png`, `icon-192.png`, `icon-512.png`, `icon-apple-touch.png`,
+     `favicon.png` — ficheiros novos (marca/ícones)
+   - `config.js` — **já vem com os teus valores reais preenchidos** (o
+     mesmo URL e chave que já estavam no site); podes substituir sem
+     medo de perder a ligação ao Supabase.
+   - `schema.sql`, `migration_v2.sql`, `README.md` — documentação, não
+     afetam o site, mas é bom manter atualizados no repositório.
+3. Faz commit ("Update to v2"). O GitHub Pages atualiza o site sozinho
+   (demora cerca de 1 minuto — vês o progresso em **Settings → Pages**).
+
+> Nota: como todos os ficheiros estão na raiz do repositório (sem pastas
+> `css/`/`js/`), basta arrastar os ficheiros deste pacote para a raiz e
+> confirmar que substituem os antigos com o mesmo nome.
+
+## 3. Testar
+
+1. Abre **https://proqualea-ctrl.github.io/ponto-proqual/** no telemóvel.
+2. No ecrã inicial deve aparecer o logótipo real da PROQUAL e, pouco depois,
+   o botão **"📲 Instalar a app neste telemóvel"** (em Android/Chrome; no
+   iPhone/Safari, instala-se por **Partilhar → Adicionar ao ecrã principal**).
+3. Testa o fluxo normal (**SOU FUNCIONÁRIO** → escolher/criar → **Entrada**
+   ou **Saída** → foto → confirmar) e confirma que aparece o aviso de
+   localização se estiveres longe do local escolhido.
+4. Entra em **GESTÃO** com a tua conta e confirma:
+   - o crachá ao lado de "GESTÃO" mostra "Administrador" ou "Encarregado";
+   - a tab **Resumo** mostra horas por funcionário no mês atual;
+   - o botão **Exportar para Excel** descarrega um `.xlsx`;
+   - (se fores admin) consegues **Editar**/**Apagar** um registo.
+
+---
+
+## Domínio próprio (para mais tarde)
+
+A app já está pronta para um domínio próprio (ex: `ponto.proqual.pt`) assim
+que a PROQUAL tiver um registado. Quando o tiveres, avisa-me e trato de:
+
+1. Configurar o `CNAME` no GitHub Pages (**Settings → Pages → Custom
+   domain**);
+2. Adicionar o registo DNS correspondente junto de quem gere o domínio;
+3. Confirmar o certificado HTTPS automático do GitHub Pages para esse
+   domínio.
+
+Até lá, o link **https://proqualea-ctrl.github.io/ponto-proqual/** funciona
+normalmente e pode continuar a ser partilhado com os funcionários.
 
 ---
 
 ## Estrutura do projeto
 
+Todos os ficheiros ficam na raiz (sem subpastas), tal como já estão no
+repositório GitHub:
+
 ```
-proqual-ponto/
-├── index.html          # toda a interface (um único ficheiro HTML)
-├── css/style.css        # visual — cores em variáveis no topo do ficheiro
-├── js/config.js         # chaves do Supabase + textos da marca (edita aqui)
-├── js/app.js            # toda a lógica (navegação, câmara, GPS, Supabase)
-└── supabase/schema.sql  # tabelas, storage e permissões (corre uma vez)
+index.html          # toda a interface
+style.css           # visual — cores em variáveis no topo do ficheiro
+config.js           # chaves do Supabase + textos da marca (já preenchido)
+app.js              # toda a lógica (navegação, câmara, GPS, Supabase, etc.)
+manifest.json       # configuração da app instalável (PWA)
+sw.js               # service worker (cache da app para funcionar como PWA)
+logo.png            # logótipo PROQUAL usado na interface
+icon-192.png / icon-512.png / icon-apple-touch.png / favicon.png
+                     # ícones da app/instalação/aba do browser
+schema.sql           # schema completo (só para um projeto Supabase novo)
+migration_v2.sql     # migração aditiva para o projeto já existente
 ```
-
-## Personalizar a identidade visual da PROQUAL
-
-Abre `css/style.css` e muda as variáveis no topo (`:root`), por exemplo:
-
-```css
---accent: #e8720c;   /* cor principal dos botões */
---bg: #17181c;        /* cor de fundo */
-```
-
-Para usar o logótipo real da PROQUAL em vez da letra "P", substitui o bloco
-`.brand-mark` em `index.html` por uma tag `<img src="assets/logo.png" ...>`
-(coloca o ficheiro do logo dentro da pasta `assets/`).
 
 ## Notas sobre segurança e permissões
 
-- Tal como no site original, marcar presença **não exige login** — é um
-  registo tipo quiosque, pensado para ser rápido no telemóvel de cada
-  funcionário. Só a área de **Gestão** exige email+password.
-- Se preferires que só possa marcar presença quem tiver conta (mais
-  seguro, mas mais lento no dia-a-dia), diz-me e ajusto as políticas em
-  `supabase/schema.sql` e o fluxo da app.
-- As fotos ficam num bucket público por defeito (só quem tem o link direto
-  da foto a vê — os links não são listados em lado nenhum público). Se
-  quiseres torná-las privadas (só acessíveis a quem faz login na Gestão),
-  também é só ajustar o `schema.sql` — é mais uma linha de configuração.
+- Marcar presença continua a **não exigir login** — é um registo tipo
+  quiosque, pensado para ser rápido no telemóvel de cada funcionário. Só a
+  área de **Gestão** exige email+password.
+- Editar e apagar registos, e gerir funcionários/locais, está agora
+  restrito a contas com papel `admin` em `admin_profiles` (ver secção 1).
+- As fotos continuam num bucket público por defeito (só quem tem o link
+  direto da foto a vê). Se quiseres torná-las privadas, é só ajustar o
+  `schema.sql`/`migration_v2.sql` — diz-me e faço essa alteração.

@@ -4,14 +4,15 @@
    exata da PROQUAL (logo, cores da marca) quando os tiveres.
    ============================================================= */
 :root {
-  --bg: #17181c;
-  --bg-elevated: #202126;
-  --bg-card: #26272d;
-  --border: #34353b;
-  --text: #f2f2f0;
-  --text-muted: #9a9a9f;
-  --accent: #e8720c;
-  --accent-dark: #a4520c;
+  --bg: #14181f;
+  --bg-elevated: #1c212b;
+  --bg-card: #232936;
+  --border: #313847;
+  --text: #f2f3f5;
+  --text-muted: #97a0b1;
+  --accent: #0a5aa5;
+  --accent-dark: #084474;
+  --accent-light: #3b82d6;
   --green: #23c552;
   --green-bg: #16321f;
   --green-border: #234a2c;
@@ -93,22 +94,25 @@ body {
 
 /* ---------- Home ---------- */
 .home-hero { text-align: left; margin-bottom: 32px; }
-.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
-.brand-mark {
-  width: 38px; height: 38px;
-  border-radius: 9px;
-  background: var(--accent);
-  color: #1a1a1a;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 900;
-  font-size: 20px;
+.brand-logo-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 10px 16px;
+  margin-bottom: 28px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.25);
 }
-.brand-mark--lg { width: 56px; height: 56px; font-size: 28px; margin: 0 auto 20px; background: var(--bg-card); }
-.brand-name {
-  color: var(--accent);
-  letter-spacing: 3px;
-  font-weight: 700;
-  font-size: 13px;
+.brand-logo-box--login {
+  display: flex;
+  margin: 0 auto 20px;
+}
+.brand-logo {
+  display: block;
+  height: 46px;
+  width: auto;
+  max-width: 100%;
 }
 .home-hero h1 {
   font-size: 40px;
@@ -138,13 +142,13 @@ body {
 .option-card--primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #201400;
+  color: #ffffff;
 }
 .option-icon { font-size: 26px; }
 .option-text { display: flex; flex-direction: column; gap: 2px; }
 .option-text strong { font-size: 16px; letter-spacing: 0.3px; }
 .option-text small { font-size: 13px; opacity: 0.75; }
-.option-card--primary .option-text small { color: #3a2400; opacity: 0.85; }
+.option-card--primary .option-text small { color: #eaf2fb; opacity: 0.9; }
 
 /* ---------- Lists ---------- */
 .list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
@@ -210,7 +214,7 @@ body {
   margin-bottom: 14px;
   font-family: inherit;
 }
-.text-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(232,114,12,0.2); }
+.text-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(10,90,165,0.25); }
 .text-input--sm { margin-bottom: 0; padding: 10px 12px; font-size: 13px; border-color: var(--border); }
 
 .btn-row { display: flex; gap: 12px; }
@@ -318,6 +322,7 @@ body {
 
 .record-card {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 14px;
   border-radius: 12px;
@@ -348,6 +353,108 @@ body {
 .record-info a { color: var(--accent); text-decoration: none; }
 
 .admin-add-row { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.admin-add-row .text-input { margin-bottom: 0; }
+#admin-add-location-row { flex-direction: column; }
+
+.role-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  margin-left: 8px;
+  white-space: nowrap;
+}
+.role-badge--admin { color: var(--accent-light); border-color: var(--accent-dark); }
+.role-badge--encarregado { color: var(--text-muted); }
+
+.geo-status {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.geo-status--ok { color: var(--green); }
+.geo-status--err { color: var(--red); }
+
+.geofence-msg {
+  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin: -6px 0 18px;
+}
+.geofence-msg--ok { background: var(--green-bg); border: 1px solid var(--green-border); color: var(--green); }
+.geofence-msg--warn { background: var(--red-bg); border: 1px solid var(--red-border); color: var(--red); }
+
+.install-btn {
+  display: block;
+  width: 100%;
+  margin-top: 18px;
+  padding: 13px 16px;
+  border-radius: 12px;
+  border: 1px dashed var(--accent);
+  background: transparent;
+  color: var(--accent-light);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.install-btn:hover { background: var(--bg-card); }
+
+/* ---------- Resumo mensal ---------- */
+.summary-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  margin-bottom: 10px;
+}
+.summary-card .s-name { font-size: 14px; font-weight: 700; }
+.summary-card .s-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.summary-card .s-hours { font-size: 18px; font-weight: 800; color: var(--accent-light); text-align: right; }
+.summary-card .s-hours small { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); }
+
+/* ---------- Record actions (editar/apagar) ---------- */
+.record-actions { display: flex; flex-direction: row; gap: 14px; align-items: center; margin-left: auto; }
+.record-actions button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-family: inherit;
+}
+.record-actions button:hover { color: var(--accent-light); }
+.record-actions button.danger:hover { color: var(--red); }
+
+/* ---------- Edit record modal ---------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+}
+.modal-backdrop[hidden] { display: none; }
+.modal-box {
+  width: 100%;
+  max-width: 560px;
+  background: var(--bg-elevated);
+  border-radius: 18px 18px 0 0;
+  padding: 22px 20px 28px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+.modal-box h3 { margin: 0 0 16px; font-size: 16px; }
+.modal-box label { display: block; font-size: 12px; color: var(--text-muted); margin: 12px 0 6px; }
 
 /* ---------- Toast ---------- */
 .toast {
