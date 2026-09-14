@@ -93,7 +93,7 @@ body {
 }
 
 /* ---------- Home ---------- */
-.home-hero { text-align: left; margin-bottom: 32px; }
+.home-hero { text-align: center; margin-bottom: 32px; }
 .brand-logo-box {
   display: flex;
   align-items: center;
