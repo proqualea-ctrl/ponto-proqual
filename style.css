@@ -517,6 +517,16 @@ body {
 }
 .toast--error { border-color: var(--red); color: var(--red); }
 
+/* ---------- Rodapé institucional ---------- */
+.app-footer {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 32px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
 @media (max-width: 400px) {
   .home-hero h1 { font-size: 34px; }
 }

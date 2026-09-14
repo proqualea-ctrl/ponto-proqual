@@ -124,6 +124,12 @@
   document.getElementById("home-subtitle").textContent = cfg.APP_SUBTITLE;
   document.title = cfg.APP_TITLE + " — Registo de Presença";
 
+  const footerEl = document.getElementById("app-footer");
+  if (footerEl) {
+    const year = new Date().getFullYear();
+    footerEl.textContent = `© ${year} ${cfg.COMPANY_NAME}` + (cfg.COMPANY_TAGLINE ? ` · ${cfg.COMPANY_TAGLINE}` : "");
+  }
+
   // -----------------------------------------------------------
   // PWA: instalar no telemóvel + service worker
   // -----------------------------------------------------------
@@ -1104,10 +1110,24 @@
       Estado: rec.review_status ? rec.review_status.charAt(0).toUpperCase() + rec.review_status.slice(1) : "",
     }));
     if (!rows.length) { toast("Não há registos para exportar", true); return; }
-    const ws = XLSX.utils.json_to_sheet(rows);
+
+    // Cabeçalho oficial (identidade da empresa) antes da tabela de dados —
+    // NUIT/morada só aparecem se estiverem preenchidos em config.js.
+    const now = new Date();
+    const headerLines = [[cfg.COMPANY_NAME || "PROQUAL Engenheiros e Associados, Lda"]];
+    if (cfg.COMPANY_TAGLINE) headerLines.push([cfg.COMPANY_TAGLINE]);
+    if (cfg.COMPANY_NUIT) headerLines.push([`NUIT: ${cfg.COMPANY_NUIT}`]);
+    if (cfg.COMPANY_ADDRESS) headerLines.push([cfg.COMPANY_ADDRESS]);
+    headerLines.push(["Relatório de Registos de Presença"]);
+    headerLines.push([`Documento gerado automaticamente pelo sistema ${cfg.APP_TITLE} em ${now.toLocaleString("pt-PT")}`]);
+    headerLines.push([]); // linha em branco antes da tabela
+
+    const columns = Object.keys(rows[0]);
+    const aoa = [...headerLines, columns, ...rows.map((r) => columns.map((c) => r[c]))];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Registos");
-    const stamp = new Date().toISOString().slice(0, 10);
+    const stamp = now.toISOString().slice(0, 10);
     XLSX.writeFile(wb, `presencas-proqual-${stamp}.xlsx`);
   });
 

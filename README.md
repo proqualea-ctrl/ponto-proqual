@@ -50,7 +50,12 @@ projeto que já está a funcionar. Não é preciso recomeçar do zero.
     o botão "+ Novo local"; ele só escolhe entre os locais que a Gestão já
     criou (isto já estava protegido na base de dados, agora também está
     refletido na interface).
-11. **Justificação de faltas** — novo botão no ecrã inicial, "JUSTIFICAR
+11. **Identidade institucional** — rodapé com o nome legal da empresa e o
+    lema "O Futuro com Precisão" visível em todos os ecrãs da app, e os
+    relatórios Excel passam a sair com um cabeçalho oficial (nome da
+    empresa, NUIT/morada se preenchidos em `config.js`, título do
+    relatório e data/hora de geração) antes da tabela de dados.
+12. **Justificação de faltas** — novo botão no ecrã inicial, "JUSTIFICAR
     FALTA": o funcionário escolhe o seu nome, indica a data, o motivo
     (Doença, Licença, Motivo pessoal, Outro), pode escrever uma nota e
     anexar uma **foto** (ex: atestado médico, tirada na hora ou escolhida
@@ -204,7 +209,11 @@ subpastas). Para atualizar:
      `favicon.png` — ficheiros novos (marca/ícones)
    - `config.js` — **já vem com os teus valores reais preenchidos** (o
      mesmo URL e chave que já estavam no site); podes substituir sem
-     medo de perder a ligação ao Supabase.
+     medo de perder a ligação ao Supabase. Se quiseres que o NUIT e a
+     morada da empresa apareçam no cabeçalho dos relatórios Excel, edita
+     as linhas `COMPANY_NUIT` e `COMPANY_ADDRESS` neste ficheiro antes de
+     subir — se deixares em branco, essas linhas simplesmente não
+     aparecem no relatório.
    - `schema.sql`, `migration_v2.sql`, `README.md` — documentação, não
      afetam o site, mas é bom manter atualizados no repositório.
 3. Faz commit ("Update to v2"). O GitHub Pages atualiza o site sozinho
