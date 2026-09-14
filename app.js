@@ -25,7 +25,6 @@
     session: null, // sessão de auth da Gestão
     role: null,    // 'admin' | 'encarregado' | null
     dashboard: { records: [], employees: [], locations: [] },
-    newLocationGeo: { lat: null, lng: null }, // captura usada nos formulários "+ Novo local"
     installPromptEvent: null,
     editingRecordId: null,
   };
@@ -220,8 +219,16 @@
     state.locations = data || [];
   }
 
-  function locationIcon(type) { return type === "escritorio" ? "🏢" : "🏗️"; }
-  function locationLabel(type) { return type === "escritorio" ? "Escritório" : "Obra"; }
+  function locationIcon(type) {
+    if (type === "escritorio") return "🏢";
+    if (type === "externo") return "🚗";
+    return "🏗️";
+  }
+  function locationLabel(type) {
+    if (type === "escritorio") return "Escritório";
+    if (type === "externo") return "Serviço Externo";
+    return "Obra";
+  }
 
   function renderLocationList() {
     const box = document.getElementById("location-list");
@@ -250,7 +257,7 @@
     });
   }
 
-  function captureGeoInto(statusElId, target) {
+  function captureGeoInto(statusElId, onCapture) {
     const status = document.getElementById(statusElId);
     if (!("geolocation" in navigator)) {
       status.textContent = "Sem suporte de GPS neste dispositivo.";
@@ -261,8 +268,7 @@
     status.className = "geo-status";
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        target.lat = pos.coords.latitude;
-        target.lng = pos.coords.longitude;
+        onCapture(pos.coords.latitude, pos.coords.longitude);
         status.textContent = `📍 Localização capturada (±${Math.round(pos.coords.accuracy)}m)`;
         status.className = "geo-status geo-status--ok";
       },
@@ -275,32 +281,11 @@
     );
   }
 
-  document.getElementById("new-location-geo-btn").addEventListener("click", () => {
-    captureGeoInto("new-location-geo-status", state.newLocationGeo);
-  });
-
-  document.getElementById("new-location-continue").addEventListener("click", async () => {
-    const nameInput = document.getElementById("new-location-name");
-    const typeInput = document.getElementById("new-location-type");
-    const name = nameInput.value.trim();
-    if (!name) { toast("Escreve o nome do local", true); return; }
-    const payload = { name, type: typeInput.value };
-    if (state.newLocationGeo.lat != null) {
-      payload.latitude = state.newLocationGeo.lat;
-      payload.longitude = state.newLocationGeo.lng;
-    }
-    const { data, error } = await supabase
-      .from("locations")
-      .insert(payload)
-      .select()
-      .single();
-    if (error) { console.error(error); toast("Não foi possível criar o local", true); return; }
-    nameInput.value = "";
-    state.newLocationGeo = { lat: null, lng: null };
-    document.getElementById("new-location-geo-status").textContent = "";
-    state.selectedLocation = data;
-    showScreen("direction-select");
-  });
+  // Nota: criar locais novos ("+ Novo local") deixou de estar disponível
+  // no ecrã do funcionário — só a Gestão pode criar obras/escritórios
+  // (ver "admin-add-location-btn" mais abaixo). Isto está também reforçado
+  // pela regra de segurança da base de dados (RLS): só utilizadores
+  // autenticados podem inserir em "locations".
 
   // -----------------------------------------------------------
   // Ecrã "Confirmar presença": câmara + GPS + hora
@@ -331,6 +316,8 @@
     geoMsgEl.hidden = true;
     state.geofence = { distance: null, within: null };
 
+    document.getElementById("confirm-note").value = "";
+
     startCamera();
     startClock();
     requestGps();
@@ -339,13 +326,13 @@
   function updateGeofenceMessage() {
     const el = document.getElementById("geofence-msg");
     const loc = state.selectedLocation;
-    if (!loc || loc.latitude == null || loc.longitude == null || state.gps.status !== "ok") {
+    if (!loc || loc.type === "externo" || loc.latitude == null || loc.longitude == null || state.gps.status !== "ok") {
       el.hidden = true;
       state.geofence = { distance: null, within: null };
       return;
     }
     const dist = distanceMeters(state.gps.lat, state.gps.lng, loc.latitude, loc.longitude);
-    const radius = loc.radius_m || 150;
+    const radius = loc.radius_m || 100;
     const within = dist <= radius;
     state.geofence = { distance: Math.round(dist), within };
     if (within) {
@@ -481,6 +468,9 @@
         photoPath = fileName;
       }
 
+      const isExterno = state.selectedLocation.type === "externo";
+      const note = document.getElementById("confirm-note").value.trim();
+
       const { error: insErr } = await supabase.from("attendance_records").insert({
         employee_id: state.selectedEmployee.id,
         location_id: state.selectedLocation.id,
@@ -492,12 +482,15 @@
         gps_status: state.gps.status,
         distance_m: state.geofence.distance,
         within_geofence: state.geofence.within,
+        note: note || null,
+        review_status: isExterno ? "pendente" : null,
         device_time: new Date().toISOString(),
       });
       if (insErr) throw insErr;
 
-      document.getElementById("success-summary").textContent =
-        `${state.selectedEmployee.name} — ${state.direction === "entrada" ? "Entrada" : "Saída"} — ${state.selectedLocation.name}`;
+      document.getElementById("success-summary").textContent = isExterno
+        ? `${state.selectedEmployee.name} — ${state.direction === "entrada" ? "Entrada" : "Saída"} — ${state.selectedLocation.name} (fica pendente de confirmação pela Gestão)`
+        : `${state.selectedEmployee.name} — ${state.direction === "entrada" ? "Entrada" : "Saída"} — ${state.selectedLocation.name}`;
       showScreen("success");
     } catch (err) {
       console.error(err);
@@ -669,11 +662,20 @@
     data.forEach((rec) => {
       const when = new Date(rec.created_at).toLocaleString("pt-PT");
       const mapLink = (rec.latitude && rec.longitude)
-        ? `<a href="https://maps.google.com/?q=${rec.latitude},${rec.longitude}" target="_blank" rel="noopener">Ver no mapa</a>`
+        ? `📍 ${rec.latitude.toFixed(5)}, ${rec.longitude.toFixed(5)}${rec.accuracy_m ? ` (±${Math.round(rec.accuracy_m)}m)` : ""} · <a href="https://maps.google.com/?q=${rec.latitude},${rec.longitude}" target="_blank" rel="noopener">Ver no mapa</a>`
         : "Sem localização";
       const geofenceTag = rec.within_geofence === false
         ? `<div class="r-line" style="color:var(--red);">⚠️ Fora da área (${Math.round(rec.distance_m || 0)}m)</div>`
         : "";
+      const noteTag = rec.note
+        ? `<div class="r-line">📝 ${escapeHtml(rec.note)}</div>`
+        : "";
+      const reviewBadges = {
+        pendente: `<span class="review-badge review-badge--pendente">⏳ Pendente</span>`,
+        aprovado: `<span class="review-badge review-badge--aprovado">✅ Aprovado</span>`,
+        rejeitado: `<span class="review-badge review-badge--rejeitado">❌ Rejeitado</span>`,
+      };
+      const reviewTag = rec.review_status ? `<div class="r-line">${reviewBadges[rec.review_status] || ""}</div>` : "";
       const photo = rec.photo_path
         ? `<img class="record-thumb" src="${publicPhotoUrl(rec.photo_path)}" alt="" />`
         : `<div class="record-thumb"></div>`;
@@ -686,12 +688,17 @@
           <div class="r-line">${escapeHtml(rec.locations?.name || "—")} · ${when}</div>
           <div class="r-line">${mapLink}</div>
           ${geofenceTag}
+          ${noteTag}
+          ${reviewTag}
         </div>
         <span class="record-badge ${rec.direction === "entrada" ? "record-badge--in" : "record-badge--out"}">
           ${rec.direction === "entrada" ? "Entrada" : "Saída"}
         </span>
         ${isAdmin() ? `
         <div class="record-actions">
+          ${rec.review_status === "pendente" ? `
+          <button class="approve" data-approve-record="${rec.id}">✅ Aprovar</button>
+          <button class="danger" data-reject-record="${rec.id}">❌ Rejeitar</button>` : ""}
           <button data-edit-record="${rec.id}">✏️ Editar</button>
           <button class="danger" data-delete-record="${rec.id}">🗑 Apagar</button>
         </div>` : ""}
@@ -705,7 +712,21 @@
     if (editBtn) { openEditRecordModal(editBtn.dataset.editRecord); return; }
     const delBtn = e.target.closest("[data-delete-record]");
     if (delBtn) { deleteRecord(delBtn.dataset.deleteRecord); return; }
+    const approveBtn = e.target.closest("[data-approve-record]");
+    if (approveBtn) { setReviewStatus(approveBtn.dataset.approveRecord, "aprovado"); return; }
+    const rejectBtn = e.target.closest("[data-reject-record]");
+    if (rejectBtn) { setReviewStatus(rejectBtn.dataset.rejectRecord, "rejeitado"); return; }
   });
+
+  async function setReviewStatus(recordId, status) {
+    const { error } = await supabase
+      .from("attendance_records")
+      .update({ review_status: status })
+      .eq("id", recordId);
+    if (error) { console.error(error); toast("Não foi possível atualizar o estado", true); return; }
+    toast(status === "aprovado" ? "Registo aprovado" : "Registo rejeitado");
+    loadRecords();
+  }
 
   // -----------------------------------------------------------
   // Gestão: editar / apagar registos (apenas admin)
@@ -838,24 +859,42 @@
   });
 
   document.getElementById("admin-new-location-geo-btn").addEventListener("click", () => {
-    captureGeoInto("admin-new-location-geo-status", state.newLocationGeo);
+    captureGeoInto("admin-new-location-geo-status", (lat, lng) => {
+      document.getElementById("admin-new-location-lat").value = lat.toFixed(6);
+      document.getElementById("admin-new-location-lng").value = lng.toFixed(6);
+    });
   });
 
   document.getElementById("admin-add-location-btn").addEventListener("click", async () => {
     const nameInput = document.getElementById("admin-new-location-name");
     const typeInput = document.getElementById("admin-new-location-type");
+    const latInput = document.getElementById("admin-new-location-lat");
+    const lngInput = document.getElementById("admin-new-location-lng");
+    const radiusInput = document.getElementById("admin-new-location-radius");
     const name = nameInput.value.trim();
     if (!name) return;
+
     const payload = { name, type: typeInput.value };
-    if (state.newLocationGeo.lat != null) {
-      payload.latitude = state.newLocationGeo.lat;
-      payload.longitude = state.newLocationGeo.lng;
+    const lat = parseFloat(latInput.value.replace(",", "."));
+    const lng = parseFloat(lngInput.value.replace(",", "."));
+    if (!isNaN(lat) && !isNaN(lng)) {
+      payload.latitude = lat;
+      payload.longitude = lng;
+      const radius = parseInt(radiusInput.value, 10);
+      payload.radius_m = !isNaN(radius) && radius > 0 ? radius : 100;
+    } else if (latInput.value.trim() || lngInput.value.trim()) {
+      toast("Latitude/Longitude inválidas — deixa ambas em branco ou preenche as duas", true);
+      return;
     }
+
     const { error } = await supabase.from("locations").insert(payload);
     if (error) { console.error(error); toast("Erro ao adicionar local", true); return; }
     nameInput.value = "";
-    state.newLocationGeo = { lat: null, lng: null };
+    latInput.value = "";
+    lngInput.value = "";
+    radiusInput.value = "100";
     document.getElementById("admin-new-location-geo-status").textContent = "";
+    toast(payload.latitude != null ? "Local adicionado com localização definida" : "Local adicionado (sem coordenadas — podes adicionar mais tarde)");
     loadDashboard();
   });
 
@@ -867,13 +906,15 @@
       Funcionário: rec.employees?.name || "",
       Departamento: rec.employees?.department || "",
       Local: rec.locations?.name || "",
-      Tipo: rec.locations?.type === "escritorio" ? "Escritório" : "Obra",
+      Tipo: locationLabel(rec.locations?.type),
       Direção: rec.direction === "entrada" ? "Entrada" : "Saída",
       "Data/Hora": new Date(rec.created_at).toLocaleString("pt-PT"),
       Latitude: rec.latitude || "",
       Longitude: rec.longitude || "",
       "Distância (m)": rec.distance_m != null ? Math.round(rec.distance_m) : "",
       "Dentro da área": rec.within_geofence == null ? "" : (rec.within_geofence ? "Sim" : "Não"),
+      Nota: rec.note || "",
+      Estado: rec.review_status ? rec.review_status.charAt(0).toUpperCase() + rec.review_status.slice(1) : "",
     }));
     if (!rows.length) { toast("Não há registos para exportar", true); return; }
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -906,7 +947,7 @@
 
     const { data, error } = await supabase
       .from("attendance_records")
-      .select("employee_id, direction, created_at, employees(name, department)")
+      .select("employee_id, direction, created_at, review_status, employees(name, department)")
       .gte("created_at", start.toISOString())
       .lt("created_at", end.toISOString())
       .order("created_at", { ascending: true });
@@ -914,9 +955,14 @@
     if (error) { console.error(error); box.innerHTML = '<p class="list-empty">Erro ao carregar o resumo.</p>'; return; }
     if (!data.length) { box.innerHTML = '<p class="list-empty">Sem registos neste mês.</p>'; return; }
 
+    // Registos de "Serviço Externo" rejeitados pela Gestão não contam
+    // para as horas trabalhadas (a presença não foi confirmada).
+    const validData = data.filter((rec) => rec.review_status !== "rejeitado");
+    if (!validData.length) { box.innerHTML = '<p class="list-empty">Sem registos válidos neste mês.</p>'; return; }
+
     // Agrupa por funcionário e emparelha entrada->saída cronologicamente
     const byEmployee = new Map();
-    data.forEach((rec) => {
+    validData.forEach((rec) => {
       if (!byEmployee.has(rec.employee_id)) {
         byEmployee.set(rec.employee_id, {
           name: rec.employees?.name || "—",

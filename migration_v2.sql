@@ -11,7 +11,13 @@
 alter table public.locations
   add column if not exists latitude double precision,
   add column if not exists longitude double precision,
-  add column if not exists radius_m integer not null default 150;
+  add column if not exists radius_m integer not null default 100;
+
+-- Se já tinhas corrido uma versão anterior desta migração (com o raio
+-- por defeito a 150m), isto ajusta para 100m os locais que ainda estão
+-- com o valor antigo por defeito. Não mexe em locais onde já tenhas
+-- definido um raio à mão (diferente de 150).
+update public.locations set radius_m = 100 where radius_m = 150;
 
 -- -------------------------------------------------------------
 -- 2) Guardar a distância calculada e se ficou dentro do raio
@@ -19,6 +25,23 @@ alter table public.locations
 alter table public.attendance_records
   add column if not exists distance_m double precision,
   add column if not exists within_geofence boolean;
+
+-- -------------------------------------------------------------
+-- 1b) Novo tipo de local: "Serviço Externo" (Finanças, banco, notário,
+-- fornecedores, etc.) — sem morada fixa, por isso sem geofencing.
+-- -------------------------------------------------------------
+alter table public.locations drop constraint if exists locations_type_check;
+alter table public.locations add constraint locations_type_check
+  check (type in ('obra', 'escritorio', 'externo'));
+
+-- Nota livre do funcionário no registo (ex: "Finanças, entrega de
+-- documentos") e estado de aprovação da Gestão. O estado só é usado
+-- para registos em locais do tipo 'externo' (sem geofencing) — a
+-- Gestão confirma manualmente se o funcionário esteve mesmo no sítio.
+alter table public.attendance_records
+  add column if not exists note text,
+  add column if not exists review_status text
+    check (review_status in ('pendente', 'aprovado', 'rejeitado'));
 
 -- -------------------------------------------------------------
 -- 3) Níveis de acesso da Gestão: admin vs encarregado

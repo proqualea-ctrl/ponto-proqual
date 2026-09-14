@@ -39,6 +39,17 @@ projeto que já está a funcionar. Não é preciso recomeçar do zero.
      registos, tudo o resto).
    - **encarregado** — só vê registos, resumo e exporta; não pode gerir
      funcionários/locais nem editar/apagar registos.
+9. **Local do tipo "Serviço Externo" + aprovação da Gestão** — para quando
+   um funcionário precisa de se deslocar em nome da empresa a um sítio sem
+   morada fixa (Finanças, banco, notário, fornecedores, etc.). Este tipo de
+   local não tem geofencing (não avisa sobre localização), o funcionário
+   pode escrever uma nota a explicar onde foi, e o registo fica marcado
+   como **"⏳ Pendente"** até a Gestão o **Aprovar** ou **Rejeitar** —
+   registos rejeitados não contam para as horas no Resumo mensal.
+10. **Só a Gestão cria obras/locais** — o ecrã do funcionário deixou de ter
+    o botão "+ Novo local"; ele só escolhe entre os locais que a Gestão já
+    criou (isto já estava protegido na base de dados, agora também está
+    refletido na interface).
 
 ---
 
@@ -87,6 +98,62 @@ Sem coordenadas, essa localização simplesmente não tem aviso de geofencing
 localização atual"** estando fisicamente no local — ou edita a linha
 diretamente na tabela `locations` no Supabase (colunas `latitude`,
 `longitude`, `radius_m`).
+
+### Preparar uma obra com antecedência (sem lá estar fisicamente)
+
+Cenário comum: um funcionário é destacado para uma obra nova amanhã de
+manhã e pode não passar pelo escritório. Como o registo de presença já
+deixa escolher **qualquer** local da lista (não só o escritório), basta
+que essa obra já esteja criada antes de ele chegar — a app não obriga
+ninguém a passar pela sede primeiro.
+
+Para criar a obra a partir do escritório, sem estares lá:
+
+1. Gestão → tab **Obras/Escritório**
+2. Escreve o nome da obra e escolhe o tipo
+3. Em vez do botão "Usar localização atual" (que exige estar no local),
+   preenche à mão os campos **Latitude** e **Longitude** — a forma mais
+   fácil é abrir o [Google Maps](https://maps.google.com), clicar com o
+   botão direito sobre o ponto exato da obra, e clicar nas coordenadas que
+   aparecem no menu (copiam automaticamente no formato `latitude,
+   longitude`).
+4. Ajusta o **Raio (m)** se quiseres (por defeito 100m — pensado para
+   confirmar que a pessoa está mesmo no local sem ser demasiado
+   apertado). Para um local mais pequeno/compacto podes descer até
+   50m; para uma obra grande ou espalhada, vale a pena subir para
+   200–300m, para não gerar avisos de geofencing desnecessários.
+   > Nota: o GPS de um telemóvel normal tem um erro típico de 5 a
+   > 20m ao ar livre (e pode ser bem pior perto de edifícios/dentro
+   > de casas). Um raio de 50m já é bastante rigoroso — funciona
+   > bem lá fora, mas pode gerar avisos falsos com o funcionário
+   > dentro de um edifício. 100m é mais seguro para o dia a dia.
+5. Podes deixar Latitude/Longitude em branco se ainda não souberes as
+   coordenadas — a obra fica na lista na mesma, sem aviso de geofencing.
+
+Assim que a obra estiver na lista, qualquer funcionário já a vê em **SOU
+FUNCIONÁRIO → escolher local** e regista a presença ali diretamente, sem
+qualquer passo pelo escritório.
+
+### Deslocações a serviços externos (Finanças, banco, notário, etc.)
+
+Para o caso de um funcionário ter de se deslocar em nome da empresa a um
+sítio sem morada fixa (ex: entregar documentos nas Finanças), cria um local
+do tipo **"Serviço Externo"**:
+
+1. Gestão → tab **Obras/Escritório**
+2. Nome (ex: "Serviços Externos" — pode ser um único local genérico e
+   reutilizável, não precisas de criar um por cada sítio) e tipo **"Serviço
+   Externo (sem morada fixa)"**
+3. Deixa Latitude/Longitude em branco — não é preciso, e este tipo de local
+   nunca mostra aviso de geofencing
+
+No dia a dia, o funcionário escolhe esse local como qualquer outro, e pode
+escrever uma nota opcional a explicar onde foi (ex: "Finanças, entrega de
+documentos"). Como não há validação automática de localização para este
+tipo, o registo fica marcado como **pendente** até a Gestão o rever: em
+**Registos**, cada entrada pendente mostra os botões **"✅ Aprovar"** e
+**"❌ Rejeitar"** (só para administradores). Um registo rejeitado fica
+identificado como tal e não entra na contagem de horas do Resumo mensal.
 
 ## 2. Atualizar os ficheiros do site (GitHub Pages)
 

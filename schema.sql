@@ -28,11 +28,13 @@ create extension if not exists "pgcrypto";
 create table if not exists public.locations (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  type text not null default 'obra' check (type in ('obra', 'escritorio')),
+  -- 'externo' = serviço externo sem morada fixa (Finanças, banco, notário,
+  -- fornecedores, etc.) — sem geofencing e sujeito a aprovação da Gestão.
+  type text not null default 'obra' check (type in ('obra', 'escritorio', 'externo')),
   address text,
   latitude double precision,
   longitude double precision,
-  radius_m integer not null default 150,
+  radius_m integer not null default 100,
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -64,6 +66,11 @@ create table if not exists public.attendance_records (
   gps_status text,            -- 'ok' | 'sem_sinal' | 'negado'
   distance_m double precision,     -- distância calculada até ao local escolhido
   within_geofence boolean,         -- se ficou dentro do raio definido para o local
+  note text,                       -- nota livre do funcionário (ex: "Finanças, entrega de documentos")
+  -- Estado de aprovação: só usado para locais do tipo 'externo' (sem
+  -- geofencing) — a Gestão confirma manualmente se o funcionário esteve
+  -- mesmo no sítio. Fica a null para registos normais em obra/escritório.
+  review_status text check (review_status in ('pendente', 'aprovado', 'rejeitado')),
   device_time timestamptz not null default now(),  -- hora do dispositivo/servidor no registo
   created_at timestamptz not null default now()
 );

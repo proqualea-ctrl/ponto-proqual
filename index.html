@@ -85,28 +85,7 @@
       <h2>ONDE ESTÁS?</h2>
     </header>
     <div class="list" id="location-list"></div>
-    <button class="link-action" data-nav="location-new">+ Novo local</button>
-  </section>
-
-  <!-- ===================== LOCATION: NOVO LOCAL ===================== -->
-  <section class="screen" data-screen="location-new">
-    <header class="screen-header">
-      <button class="back-btn" data-back="location-select">←</button>
-      <h2>ONDE ESTÁS?</h2>
-    </header>
-    <input class="text-input" id="new-location-name" placeholder="Nome da obra ou do escritório" autocomplete="off" />
-    <select class="text-input" id="new-location-type">
-      <option value="obra">Obra</option>
-      <option value="escritorio">Escritório</option>
-    </select>
-    <div class="admin-add-row" style="margin-bottom:14px;">
-      <button class="btn btn--ghost" id="new-location-geo-btn" type="button">📍 Usar a minha localização atual</button>
-      <span class="geo-status" id="new-location-geo-status"></span>
-    </div>
-    <div class="btn-row">
-      <button class="btn btn--ghost" data-back="location-select">Cancelar</button>
-      <button class="btn btn--accent" id="new-location-continue">Continuar</button>
-    </div>
+    <p class="muted" style="font-size:13px;">Não encontras o teu local? Pede à Gestão para o adicionar.</p>
   </section>
 
   <!-- ===================== DIRECTION ===================== -->
@@ -155,6 +134,8 @@
     </div>
     <p class="geofence-msg" id="geofence-msg" hidden></p>
     <p class="geofence-msg" id="duplicate-msg" hidden></p>
+
+    <input class="text-input" id="confirm-note" placeholder="Nota (opcional) — ex: Finanças, entrega de documentos" autocomplete="off" />
 
     <div class="btn-row">
       <button class="btn btn--ghost" id="retake-photo-btn" hidden>Repetir foto</button>
@@ -244,9 +225,28 @@
         <select class="text-input" id="admin-new-location-type">
           <option value="obra">Obra</option>
           <option value="escritorio">Escritório</option>
+          <option value="externo">Serviço Externo (sem morada fixa)</option>
         </select>
+
+        <p class="muted" style="font-size:12px; margin:0;">
+          💡 Podes preparar a obra com antecedência (antes de o funcionário lá
+          chegar): se estiveres no local agora, usa o botão abaixo; caso
+          contrário, cola as coordenadas (ex.: do Google Maps — clica com o
+          botão direito no ponto e copia "Latitude, Longitude"). Para
+          "Serviço Externo" (Finanças, banco, notário, etc.) não precisas de
+          coordenadas — deixa Latitude/Longitude em branco, não há aviso de
+          localização para este tipo.
+        </p>
+
         <button class="btn btn--ghost" id="admin-new-location-geo-btn" type="button">📍 Usar localização atual</button>
         <span class="geo-status" id="admin-new-location-geo-status"></span>
+
+        <div class="geo-manual-row">
+          <input class="text-input text-input--sm" id="admin-new-location-lat" placeholder="Latitude (ex: 38.7169)" inputmode="decimal" />
+          <input class="text-input text-input--sm" id="admin-new-location-lng" placeholder="Longitude (ex: -9.1399)" inputmode="decimal" />
+          <input class="text-input text-input--sm" id="admin-new-location-radius" placeholder="Raio (m)" inputmode="numeric" value="100" />
+        </div>
+
         <button class="btn btn--accent" id="admin-add-location-btn">Adicionar</button>
       </div>
       <div class="list" id="admin-location-list"></div>
