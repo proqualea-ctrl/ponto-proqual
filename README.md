@@ -64,6 +64,15 @@ projeto que já está a funcionar. Não é preciso recomeçar do zero.
     número entre parênteses no separador mostra quantos pedidos estão por
     rever, e a foto anexada aparece em miniatura, clicável para ver em
     tamanho grande).
+13. **Registo de alterações (auditoria)** — nova tab **"Histórico"** na
+    Gestão com o registo de todas as edições, aprovações, rejeições e
+    eliminações feitas por um administrador: quem fez, o quê, e quando
+    (ex: "Aprovou um registo de presença — Bruno Costa · 14/09/2026,
+    15:32"). Cada registo/pedido também mostra diretamente quem o
+    aprovou/rejeitou/editou. Este histórico é permanente — mesmo que um
+    registo seja apagado depois, a entrada no Histórico mantém-se, e não
+    existe forma de editar ou apagar uma entrada do Histórico pela app
+    (nem um administrador consegue).
 
 ---
 
@@ -79,9 +88,9 @@ preciso apagar nada**. Só falta acrescentar as tabelas/colunas novas:
 
 Isto acrescenta: colunas de geofencing em `locations` e `attendance_records`,
 a tabela `admin_profiles` (níveis de acesso), a tabela `absence_requests`
-(justificação de faltas), e atualiza as permissões para só o `admin` poder
-editar/apagar. Podes correr este ficheiro mais do que uma vez sem problema
-(não duplica nada).
+(justificação de faltas), a tabela `audit_log` (histórico de alterações),
+e atualiza as permissões para só o `admin` poder editar/apagar. Podes
+correr este ficheiro mais do que uma vez sem problema (não duplica nada).
 
 > Se um dia precisares de criar o projeto Supabase **de raiz** (ex: para uma
 > filial nova), usa antes o [`schema.sql`](./schema.sql) completo — já inclui

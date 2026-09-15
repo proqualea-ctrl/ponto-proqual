@@ -171,3 +171,43 @@ create policy "absence_delete_admin" on public.absence_requests
   for delete to authenticated using (
     exists (select 1 from public.admin_profiles where id = auth.uid() and role = 'admin')
   );
+
+-- -------------------------------------------------------------
+-- 6) Registo de alterações (auditoria): quem editou/apagou/aprovou/
+--    rejeitou o quê e quando. Guarda o nome/email de quem fez cada
+--    ação diretamente nos registos, e mantém também um livro de
+--    registo à parte (audit_log) — este último é append-only (sem
+--    update/delete no schema), para sobreviver mesmo que o registo
+--    original seja apagado, e para servir de histórico de confiança.
+-- -------------------------------------------------------------
+alter table public.attendance_records
+  add column if not exists reviewed_by text,
+  add column if not exists reviewed_at timestamptz,
+  add column if not exists updated_by text,
+  add column if not exists updated_at timestamptz;
+
+alter table public.absence_requests
+  add column if not exists reviewed_by text;
+
+create table if not exists public.audit_log (
+  id uuid primary key default gen_random_uuid(),
+  actor_email text,
+  actor_name text,
+  action text not null check (action in ('editar', 'apagar', 'aprovar', 'rejeitar')),
+  entity_type text not null check (entity_type in ('presenca', 'falta')),
+  entity_id uuid,
+  entity_label text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_audit_created on public.audit_log(created_at desc);
+
+alter table public.audit_log enable row level security;
+
+drop policy if exists "audit_insert_auth" on public.audit_log;
+create policy "audit_insert_auth" on public.audit_log
+  for insert to authenticated with check (true);
+
+drop policy if exists "audit_select_auth" on public.audit_log;
+create policy "audit_select_auth" on public.audit_log
+  for select to authenticated using (true);

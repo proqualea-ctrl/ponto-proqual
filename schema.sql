@@ -71,6 +71,10 @@ create table if not exists public.attendance_records (
   -- geofencing) — a Gestão confirma manualmente se o funcionário esteve
   -- mesmo no sítio. Fica a null para registos normais em obra/escritório.
   review_status text check (review_status in ('pendente', 'aprovado', 'rejeitado')),
+  reviewed_by text,           -- nome/email de quem aprovou ou rejeitou (auditoria)
+  reviewed_at timestamptz,
+  updated_by text,            -- nome/email de quem editou o registo pela última vez (auditoria)
+  updated_at timestamptz,
   device_time timestamptz not null default now(),  -- hora do dispositivo/servidor no registo
   created_at timestamptz not null default now()
 );
@@ -105,10 +109,31 @@ create table if not exists public.absence_requests (
   photo_path text,           -- caminho no bucket "presencas-fotos" (ex: foto de um atestado médico)
   status text not null default 'pendente' check (status in ('pendente', 'aprovado', 'rejeitado')),
   created_at timestamptz not null default now(),
+  reviewed_by text,          -- nome/email de quem aprovou ou rejeitou (auditoria)
   reviewed_at timestamptz
 );
 
 create index if not exists idx_absence_employee on public.absence_requests(employee_id);
+
+-- -------------------------------------------------------------
+-- Tabela: audit_log (registo de alterações da Gestão)
+-- Append-only por desenho: não há política de update nem delete, para
+-- que sirva mesmo como histórico de confiança (ninguém, nem admin,
+-- consegue alterar ou apagar uma entrada já registada pela app).
+-- -------------------------------------------------------------
+create table if not exists public.audit_log (
+  id uuid primary key default gen_random_uuid(),
+  actor_email text,
+  actor_name text,
+  action text not null check (action in ('editar', 'apagar', 'aprovar', 'rejeitar')),
+  entity_type text not null check (entity_type in ('presenca', 'falta')),
+  entity_id uuid,
+  entity_label text,          -- descrição legível (ex: nome do funcionário + data), guardada
+                               -- porque o registo original pode já ter sido apagado
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_audit_created on public.audit_log(created_at desc);
 
 -- -------------------------------------------------------------
 -- Row Level Security
@@ -127,6 +152,7 @@ alter table public.employees enable row level security;
 alter table public.attendance_records enable row level security;
 alter table public.admin_profiles enable row level security;
 alter table public.absence_requests enable row level security;
+alter table public.audit_log enable row level security;
 
 -- locations
 create policy "locations_select_public" on public.locations
@@ -189,6 +215,14 @@ create policy "absence_delete_admin" on public.absence_requests
   for delete to authenticated using (
     exists (select 1 from public.admin_profiles where id = auth.uid() and role = 'admin')
   );
+
+-- audit_log: qualquer conta de Gestão (admin ou encarregado) pode ver o
+-- histórico (transparência) e criar entradas; não há update/delete —
+-- é um livro de registo, não uma tabela editável.
+create policy "audit_insert_auth" on public.audit_log
+  for insert to authenticated with check (true);
+create policy "audit_select_auth" on public.audit_log
+  for select to authenticated using (true);
 
 -- -------------------------------------------------------------
 -- Storage: bucket para as fotos de presença

@@ -24,7 +24,7 @@
     duplicateWarning: null,
     session: null, // sessão de auth da Gestão
     role: null,    // 'admin' | 'encarregado' | null
-    dashboard: { records: [], employees: [], locations: [], absences: [] },
+    dashboard: { records: [], employees: [], locations: [], absences: [], auditLog: [] },
     installPromptEvent: null,
     editingRecordId: null,
     flowMode: "presence", // 'presence' | 'absence' — decide o que acontece depois de escolher o funcionário
@@ -634,14 +634,18 @@
   // -----------------------------------------------------------
   async function fetchRole() {
     state.role = "encarregado";
+    state.actorName = null;
     if (!state.session) return;
     try {
       const { data, error } = await supabase
         .from("admin_profiles")
-        .select("role")
+        .select("role, full_name")
         .eq("id", state.session.user.id)
         .maybeSingle();
-      if (!error && data) state.role = data.role;
+      if (!error && data) {
+        state.role = data.role;
+        state.actorName = data.full_name || null;
+      }
     } catch (err) {
       console.error(err);
     }
@@ -649,6 +653,32 @@
   }
 
   function isAdmin() { return state.role === "admin"; }
+
+  // -----------------------------------------------------------
+  // Gestão: registo de alterações (auditoria) — quem editou/apagou/
+  // aprovou/rejeitou o quê e quando. Tabela append-only (sem update
+  // nem delete no schema), para servir de histórico de confiança.
+  // -----------------------------------------------------------
+  function actorLabel() {
+    return state.actorName || state.session?.user?.email || "Gestão";
+  }
+
+  async function logAudit(action, entityType, entityId, entityLabel) {
+    try {
+      const { error } = await supabase.from("audit_log").insert({
+        actor_email: state.session?.user?.email || null,
+        actor_name: state.actorName || null,
+        action,
+        entity_type: entityType,
+        entity_id: entityId,
+        entity_label: entityLabel || null,
+      });
+      if (error) { console.error("audit log:", error); return; }
+      loadAuditLog(); // mantém a tab "Histórico" sempre atualizada
+    } catch (err) {
+      console.error("audit log:", err);
+    }
+  }
 
   function applyRoleUI() {
     const badge = document.getElementById("role-badge");
@@ -678,6 +708,7 @@
     }
     renderRecordsList(state.dashboard.records || []);
     renderAbsenceList(state.dashboard.absences || []);
+    renderAuditList(state.dashboard.auditLog || []);
   }
 
   // -----------------------------------------------------------
@@ -716,6 +747,7 @@
     applyRoleUI();
     await loadRecords();
     await loadAbsenceRequests();
+    await loadAuditLog();
     await loadMonthlySummary();
   }
 
@@ -777,6 +809,12 @@
         rejeitado: `<span class="review-badge review-badge--rejeitado">❌ Rejeitado</span>`,
       };
       const reviewTag = rec.review_status ? `<div class="r-line">${reviewBadges[rec.review_status] || ""}</div>` : "";
+      const reviewedByTag = (rec.review_status && rec.review_status !== "pendente" && rec.reviewed_by)
+        ? `<div class="r-line audit-line">${rec.review_status === "aprovado" ? "Aprovado" : "Rejeitado"} por ${escapeHtml(rec.reviewed_by)} em ${new Date(rec.reviewed_at).toLocaleString("pt-PT")}</div>`
+        : "";
+      const updatedTag = rec.updated_by
+        ? `<div class="r-line audit-line">✏️ Editado por ${escapeHtml(rec.updated_by)} em ${new Date(rec.updated_at).toLocaleString("pt-PT")}</div>`
+        : "";
       const photo = rec.photo_path
         ? `<img class="record-thumb" src="${publicPhotoUrl(rec.photo_path)}" alt="" />`
         : `<div class="record-thumb"></div>`;
@@ -791,6 +829,8 @@
           ${geofenceTag}
           ${noteTag}
           ${reviewTag}
+          ${reviewedByTag}
+          ${updatedTag}
         </div>
         <span class="record-badge ${rec.direction === "entrada" ? "record-badge--in" : "record-badge--out"}">
           ${rec.direction === "entrada" ? "Entrada" : "Saída"}
@@ -820,11 +860,18 @@
   });
 
   async function setReviewStatus(recordId, status) {
+    const rec = state.dashboard.records.find((r) => r.id === recordId);
     const { error } = await supabase
       .from("attendance_records")
-      .update({ review_status: status })
+      .update({ review_status: status, reviewed_by: actorLabel(), reviewed_at: new Date().toISOString() })
       .eq("id", recordId);
     if (error) { console.error(error); toast("Não foi possível atualizar o estado", true); return; }
+    logAudit(
+      status === "aprovado" ? "aprovar" : "rejeitar",
+      "presenca",
+      recordId,
+      rec ? `${rec.employees?.name || "—"} — ${rec.locations?.name || "—"}` : null
+    );
     toast(status === "aprovado" ? "Registo aprovado" : "Registo rejeitado");
     loadRecords();
   }
@@ -867,9 +914,12 @@
 
     const { error } = await supabase
       .from("attendance_records")
-      .update({ direction, employee_id, location_id, created_at, device_time: created_at })
+      .update({ direction, employee_id, location_id, created_at, device_time: created_at, updated_by: actorLabel(), updated_at: new Date().toISOString() })
       .eq("id", state.editingRecordId);
     if (error) { console.error(error); toast("Não foi possível guardar a alteração", true); return; }
+
+    const editedEmp = state.dashboard.employees.find((e) => e.id === employee_id);
+    logAudit("editar", "presenca", state.editingRecordId, editedEmp ? editedEmp.name : null);
 
     document.getElementById("edit-record-modal").hidden = true;
     state.editingRecordId = null;
@@ -879,8 +929,15 @@
 
   async function deleteRecord(recordId) {
     if (!window.confirm("Apagar este registo de presença? Esta ação não pode ser desfeita.")) return;
+    const rec = state.dashboard.records.find((r) => r.id === recordId);
     const { error } = await supabase.from("attendance_records").delete().eq("id", recordId);
     if (error) { console.error(error); toast("Não foi possível apagar o registo", true); return; }
+    logAudit(
+      "apagar",
+      "presenca",
+      recordId,
+      rec ? `${rec.employees?.name || "—"} — ${new Date(rec.created_at).toLocaleString("pt-PT")}` : null
+    );
     toast("Registo apagado");
     loadRecords();
   }
@@ -929,6 +986,9 @@
     data.forEach((req) => {
       const when = new Date(req.absence_date + "T00:00:00").toLocaleDateString("pt-PT");
       const noteTag = req.note ? `<div class="r-line">📝 ${escapeHtml(req.note)}</div>` : "";
+      const reviewedByTag = (req.status !== "pendente" && req.reviewed_by)
+        ? `<div class="r-line audit-line">${req.status === "aprovado" ? "Aprovado" : "Rejeitado"} por ${escapeHtml(req.reviewed_by)} em ${new Date(req.reviewed_at).toLocaleString("pt-PT")}</div>`
+        : "";
       const photo = req.photo_path
         ? `<a href="${publicPhotoUrl(req.photo_path)}" target="_blank" rel="noopener"><img class="record-thumb" src="${publicPhotoUrl(req.photo_path)}" alt="" /></a>`
         : `<div class="record-thumb"></div>`;
@@ -941,6 +1001,7 @@
           <div class="r-line">📅 ${when} · ${absenceReasonLabel(req.reason)}</div>
           ${noteTag}
           <div class="r-line">${statusBadges[req.status] || ""}</div>
+          ${reviewedByTag}
         </div>
         ${isAdmin() ? `
         <div class="record-actions">
@@ -964,21 +1025,72 @@
   });
 
   async function setAbsenceStatus(requestId, status) {
+    const req = state.dashboard.absences.find((r) => r.id === requestId);
     const { error } = await supabase
       .from("absence_requests")
-      .update({ status, reviewed_at: new Date().toISOString() })
+      .update({ status, reviewed_by: actorLabel(), reviewed_at: new Date().toISOString() })
       .eq("id", requestId);
     if (error) { console.error(error); toast("Não foi possível atualizar o pedido", true); return; }
+    logAudit(
+      status === "aprovado" ? "aprovar" : "rejeitar",
+      "falta",
+      requestId,
+      req ? `${req.employees?.name || "—"} — ${req.absence_date}` : null
+    );
     toast(status === "aprovado" ? "Falta aprovada" : "Falta rejeitada");
     loadAbsenceRequests();
   }
 
   async function deleteAbsence(requestId) {
     if (!window.confirm("Apagar este pedido de justificação de falta?")) return;
+    const req = state.dashboard.absences.find((r) => r.id === requestId);
     const { error } = await supabase.from("absence_requests").delete().eq("id", requestId);
     if (error) { console.error(error); toast("Não foi possível apagar o pedido", true); return; }
+    logAudit("apagar", "falta", requestId, req ? `${req.employees?.name || "—"} — ${req.absence_date}` : null);
     toast("Pedido apagado");
     loadAbsenceRequests();
+  }
+
+  // -----------------------------------------------------------
+  // Gestão: histórico de alterações (tab "Histórico")
+  // -----------------------------------------------------------
+  const auditActionLabels = { editar: "✏️ Editou", apagar: "🗑 Apagou", aprovar: "✅ Aprovou", rejeitar: "❌ Rejeitou" };
+  const auditEntityLabels = { presenca: "um registo de presença", falta: "um pedido de falta" };
+
+  async function loadAuditLog() {
+    const box = document.getElementById("audit-list");
+    if (box) box.innerHTML = '<p class="list-empty">A carregar…</p>';
+
+    const { data, error } = await supabase
+      .from("audit_log")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(300);
+    if (error) { console.error(error); if (box) box.innerHTML = '<p class="list-empty">Erro ao carregar o histórico.</p>'; return; }
+
+    state.dashboard.auditLog = data || [];
+    renderAuditList(state.dashboard.auditLog);
+  }
+
+  function renderAuditList(data) {
+    const box = document.getElementById("audit-list");
+    if (!box) return;
+    if (!data.length) { box.innerHTML = '<p class="list-empty">Ainda não há alterações registadas.</p>'; return; }
+
+    box.innerHTML = "";
+    data.forEach((entry) => {
+      const when = new Date(entry.created_at).toLocaleString("pt-PT");
+      const div = document.createElement("div");
+      div.className = "record-card";
+      div.innerHTML = `
+        <div class="record-info">
+          <div class="r-name">${auditActionLabels[entry.action] || entry.action} ${auditEntityLabels[entry.entity_type] || ""}</div>
+          <div class="r-line">${escapeHtml(entry.entity_label || "—")}</div>
+          <div class="r-line">👤 ${escapeHtml(entry.actor_name || entry.actor_email || "Gestão")} · ${when}</div>
+        </div>
+      `;
+      box.appendChild(div);
+    });
   }
 
   // -----------------------------------------------------------
