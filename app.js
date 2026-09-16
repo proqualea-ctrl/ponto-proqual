@@ -1581,34 +1581,51 @@
     const approvedAbsences = (absenceData || []).filter((req) => req.status === "aprovado");
     const employee = state.dashboard.employees.find((e) => e.id === empId);
 
-    // Agrupa os registos de presença por dia, emparelhando cada
-    // entrada com a saída seguinte (mesma lógica do Resumo mensal,
-    // mas atribuída ao dia da entrada).
+    // Agrupa os registos de presença por dia (o dia do próprio registo,
+    // não o dia da entrada — evita perder registos quando há mais do que
+    // um par entrada/saída no mesmo dia, ou uma Saída "órfã" sem entrada
+    // correspondente nesse dia, que continua a app a permitir com apenas
+    // um aviso). Dentro de cada dia, empareha sequencialmente para somar
+    // as horas, mas recolhe SEMPRE as tarefas de todas as saídas desse
+    // dia, independentemente de terem encontrado uma entrada aberta.
     const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    const dayMap = new Map();
-    let openEntrada = null;
+    const byDay = new Map();
     validData.forEach((rec) => {
       const t = new Date(rec.created_at);
-      if (rec.direction === "entrada") {
-        openEntrada = t;
-      } else if (rec.direction === "saida" && openEntrada) {
-        const key = ymd(openEntrada);
-        const entry = dayMap.get(key) || { entrada: null, saida: null, hours: 0, incomplete: false, tasks: null };
-        if (!entry.entrada) entry.entrada = openEntrada;
-        entry.saida = t;
-        entry.hours += (t - openEntrada) / 3600000;
-        if (Array.isArray(rec.tasks) && rec.tasks.length) entry.tasks = rec.tasks;
-        dayMap.set(key, entry);
-        openEntrada = null;
-      }
+      const key = ymd(t);
+      if (!byDay.has(key)) byDay.set(key, []);
+      byDay.get(key).push({ direction: rec.direction, time: t, tasks: rec.tasks });
     });
-    if (openEntrada) {
-      const key = ymd(openEntrada);
-      const entry = dayMap.get(key) || { entrada: null, saida: null, hours: 0, incomplete: false, tasks: null };
-      if (!entry.entrada) entry.entrada = openEntrada;
-      entry.incomplete = true;
-      dayMap.set(key, entry);
-    }
+
+    const dayMap = new Map();
+    byDay.forEach((recs, key) => {
+      recs.sort((a, b) => a.time - b.time);
+      let openEntrada = null;
+      let firstEntrada = null;
+      let lastSaida = null;
+      let hours = 0;
+      const tasksAll = [];
+      recs.forEach((r) => {
+        if (r.direction === "entrada") {
+          if (!firstEntrada) firstEntrada = r.time;
+          openEntrada = r.time;
+        } else if (r.direction === "saida") {
+          if (!lastSaida || r.time > lastSaida) lastSaida = r.time;
+          if (openEntrada) {
+            hours += (r.time - openEntrada) / 3600000;
+            openEntrada = null;
+          }
+          if (Array.isArray(r.tasks) && r.tasks.length) tasksAll.push(...r.tasks);
+        }
+      });
+      dayMap.set(key, {
+        entrada: firstEntrada,
+        saida: lastSaida,
+        hours,
+        incomplete: !!openEntrada,
+        tasks: tasksAll.length ? tasksAll : null,
+      });
+    });
 
     const absenceMap = new Map();
     approvedAbsences.forEach((req) => absenceMap.set(req.absence_date, req.reason));

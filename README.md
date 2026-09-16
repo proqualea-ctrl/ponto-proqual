@@ -384,3 +384,10 @@ migration_v2.sql     # migração aditiva para o projeto já existente
   "Encarregado" mas continuavam visíveis no ecrã por um pormenor de CSS —
   a base de dados já bloqueava sempre a ação em si (nunca foi possível
   usá-los sem ser admin), mas agora também ficam corretamente invisíveis.
+- Correção nesta versão: na tab **Ponto Individual**, se um funcionário
+  marcasse mais do que uma Saída no mesmo dia (a app permite isto — só
+  mostra um aviso, não bloqueia), as tarefas de uma Saída "a mais" (sem
+  uma Entrada correspondente logo antes) podiam desaparecer da folha de
+  ponto e da exportação em Excel/PDF. Agora todas as tarefas de todas as
+  saídas do dia aparecem sempre, mesmo quando há mais entradas/saídas do
+  que o normal nesse dia.
