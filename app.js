@@ -246,6 +246,11 @@
     return "Obra";
   }
 
+  function formatTasksSummary(tasks) {
+    if (!Array.isArray(tasks) || !tasks.length) return "";
+    return tasks.map((t) => `${t.description}${t.percent ? ` (${t.percent}%)` : ""}`).join(", ");
+  }
+
   function renderLocationList() {
     const box = document.getElementById("location-list");
     box.innerHTML = "";
@@ -334,10 +339,61 @@
 
     document.getElementById("confirm-note").value = "";
 
+    document.getElementById("tasks-section").hidden = true;
+    document.getElementById("tasks-list").innerHTML = "";
+    updateTasksTotal();
+
     startCamera();
     startClock();
     requestGps();
   }
+
+  // -----------------------------------------------------------
+  // Tarefas realizadas no turno (só aparece na Saída, depois da
+  // foto ser tirada, e antes de confirmar/fechar o registo).
+  // -----------------------------------------------------------
+  function createTaskRow(desc, percent) {
+    const row = document.createElement("div");
+    row.className = "task-row";
+    row.innerHTML = `
+      <input class="text-input task-desc" type="text" placeholder="Descrição da tarefa" data-task-desc autocomplete="off" />
+      <input class="text-input task-percent" type="number" min="0" max="100" placeholder="%" data-task-percent />
+      <button class="task-remove-btn" type="button" data-task-remove aria-label="Remover tarefa">×</button>
+    `;
+    row.querySelector("[data-task-desc]").value = desc || "";
+    row.querySelector("[data-task-percent]").value = percent || "";
+    row.querySelector("[data-task-percent]").addEventListener("input", updateTasksTotal);
+    row.querySelector("[data-task-remove]").addEventListener("click", () => {
+      row.remove();
+      updateTasksTotal();
+    });
+    return row;
+  }
+
+  function updateTasksTotal() {
+    const percentInputs = document.querySelectorAll("#tasks-list [data-task-percent]");
+    const el = document.getElementById("tasks-total");
+    if (!percentInputs.length) { el.textContent = ""; el.className = "tasks-total"; return; }
+    let total = 0;
+    percentInputs.forEach((inp) => { total += Number(inp.value) || 0; });
+    if (total === 100) {
+      el.textContent = "Total: 100% ✅";
+      el.className = "tasks-total tasks-total--ok";
+    } else if (total > 100) {
+      el.textContent = `Total: ${total}% — excede 100%`;
+      el.className = "tasks-total tasks-total--warn";
+    } else {
+      el.textContent = `Total: ${total}% — falta ${100 - total}% (opcional, mas ajuda a Gestão)`;
+      el.className = "tasks-total tasks-total--warn";
+    }
+  }
+
+  document.getElementById("tasks-add-btn").addEventListener("click", () => {
+    const row = createTaskRow("", "");
+    document.getElementById("tasks-list").appendChild(row);
+    row.querySelector("[data-task-desc]").focus();
+    updateTasksTotal();
+  });
 
   function updateGeofenceMessage() {
     const el = document.getElementById("geofence-msg");
@@ -455,6 +511,16 @@
       document.getElementById("camera-video").hidden = true;
       document.getElementById("retake-photo-btn").hidden = false;
       btn.textContent = "Confirmar e registar presença";
+      // Só depois de a foto estar tirada — e só na Saída — é que pedimos
+      // a descrição das tarefas realizadas, antes de fechar o registo.
+      if (state.direction === "saida") {
+        const tasksSection = document.getElementById("tasks-section");
+        tasksSection.hidden = false;
+        if (!document.getElementById("tasks-list").children.length) {
+          document.getElementById("tasks-list").appendChild(createTaskRow("", ""));
+        }
+        updateTasksTotal();
+      }
       return;
     }
     // segundo clique: submete o registo
@@ -467,10 +533,27 @@
     document.getElementById("camera-video").hidden = false;
     document.getElementById("retake-photo-btn").hidden = true;
     document.getElementById("capture-btn").textContent = "Tirar foto e registar";
+    document.getElementById("tasks-section").hidden = true;
   });
 
   async function submitAttendance() {
     const btn = document.getElementById("capture-btn");
+
+    let tasks = null;
+    if (state.direction === "saida") {
+      const rows = [...document.querySelectorAll("#tasks-list .task-row")];
+      tasks = rows
+        .map((row) => ({
+          description: row.querySelector("[data-task-desc]").value.trim(),
+          percent: Number(row.querySelector("[data-task-percent]").value) || 0,
+        }))
+        .filter((t) => t.description);
+      if (!tasks.length) {
+        toast("Descreve pelo menos uma tarefa antes de confirmar a saída", true);
+        return;
+      }
+    }
+
     btn.disabled = true;
     btn.textContent = "A registar…";
     try {
@@ -499,6 +582,7 @@
         distance_m: state.geofence.distance,
         within_geofence: state.geofence.within,
         note: note || null,
+        tasks: tasks,
         review_status: isExterno ? "pendente" : null,
         device_time: new Date().toISOString(),
       });
@@ -693,6 +777,7 @@
     const adminOnly = [
       "admin-add-employee-row",
       "admin-add-location-row",
+      "export-backup-btn",
     ];
     adminOnly.forEach((id) => {
       const el = document.getElementById(id);
@@ -744,6 +829,7 @@
 
     fillSelect("filter-employee", state.dashboard.employees, "Todos os funcionários");
     fillSelect("filter-location", state.dashboard.locations, "Todos os locais");
+    fillSelect("individual-employee-select", state.dashboard.employees, "Escolher funcionário…");
     applyRoleUI();
     await loadRecords();
     await loadAbsenceRequests();
@@ -803,6 +889,9 @@
       const noteTag = rec.note
         ? `<div class="r-line">📝 ${escapeHtml(rec.note)}</div>`
         : "";
+      const tasksTag = (rec.direction === "saida" && Array.isArray(rec.tasks) && rec.tasks.length)
+        ? `<div class="r-line">🛠️ ${escapeHtml(formatTasksSummary(rec.tasks))}</div>`
+        : "";
       const reviewBadges = {
         pendente: `<span class="review-badge review-badge--pendente">⏳ Pendente</span>`,
         aprovado: `<span class="review-badge review-badge--aprovado">✅ Aprovado</span>`,
@@ -828,6 +917,7 @@
           <div class="r-line">${mapLink}</div>
           ${geofenceTag}
           ${noteTag}
+          ${tasksTag}
           ${reviewTag}
           ${reviewedByTag}
           ${updatedTag}
@@ -1219,6 +1309,7 @@
       "Distância (m)": rec.distance_m != null ? Math.round(rec.distance_m) : "",
       "Dentro da área": rec.within_geofence == null ? "" : (rec.within_geofence ? "Sim" : "Não"),
       Nota: rec.note || "",
+      Tarefas: formatTasksSummary(rec.tasks),
       Estado: rec.review_status ? rec.review_status.charAt(0).toUpperCase() + rec.review_status.slice(1) : "",
     }));
     if (!rows.length) { toast("Não há registos para exportar", true); return; }
@@ -1244,6 +1335,82 @@
   });
 
   // -----------------------------------------------------------
+  // Gestão: cópia de segurança completa (todos os dados, todas as
+  // tabelas) — um ficheiro Excel de várias folhas para guardares fora
+  // do Supabase de vez em quando. Só para administradores.
+  // -----------------------------------------------------------
+  function sheetOrPlaceholder(rows, placeholderMsg) {
+    return rows.length ? XLSX.utils.json_to_sheet(rows) : XLSX.utils.json_to_sheet([{ Aviso: placeholderMsg }]);
+  }
+
+  document.getElementById("export-backup-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("export-backup-btn");
+    btn.disabled = true;
+    btn.textContent = "A preparar cópia de segurança…";
+    try {
+      const [
+        { data: employees, error: e1 },
+        { data: locations, error: e2 },
+        { data: attendance, error: e3 },
+        { data: absences, error: e4 },
+        { data: audit, error: e5 },
+      ] = await Promise.all([
+        supabase.from("employees").select("*").order("name"),
+        supabase.from("locations").select("*").order("name"),
+        supabase.from("attendance_records").select("*, employees(name), locations(name, type)").order("created_at", { ascending: false }),
+        supabase.from("absence_requests").select("*, employees(name)").order("created_at", { ascending: false }),
+        supabase.from("audit_log").select("*").order("created_at", { ascending: false }),
+      ]);
+      const firstError = e1 || e2 || e3 || e4 || e5;
+      if (firstError) throw firstError;
+
+      const empRows = (employees || []).map((e) => ({
+        ID: e.id, Nome: e.name, Departamento: e.department || "", Ativo: e.active ? "Sim" : "Não",
+        "Criado em": new Date(e.created_at).toLocaleString("pt-PT"),
+      }));
+      const locRows = (locations || []).map((l) => ({
+        ID: l.id, Nome: l.name, Tipo: locationLabel(l.type),
+        Latitude: l.latitude ?? "", Longitude: l.longitude ?? "", "Raio (m)": l.radius_m ?? "",
+        Ativo: l.active ? "Sim" : "Não",
+      }));
+      const attRows = (attendance || []).map((r) => ({
+        ID: r.id, Funcionário: r.employees?.name || "", Local: r.locations?.name || "", Tipo: locationLabel(r.locations?.type),
+        Direção: r.direction === "entrada" ? "Entrada" : "Saída", "Data/Hora": new Date(r.created_at).toLocaleString("pt-PT"),
+        Latitude: r.latitude ?? "", Longitude: r.longitude ?? "", Nota: r.note || "",
+        Tarefas: formatTasksSummary(r.tasks),
+        Estado: r.review_status || "", "Aprovado/Rejeitado por": r.reviewed_by || "", "Editado por": r.updated_by || "",
+      }));
+      const absRows = (absences || []).map((a) => ({
+        ID: a.id, Funcionário: a.employees?.name || "", Data: a.absence_date, Motivo: absenceReasonLabel(a.reason),
+        Nota: a.note || "", "Tem foto": a.photo_path ? "Sim" : "Não", Estado: a.status,
+        "Aprovado/Rejeitado por": a.reviewed_by || "", "Pedido em": new Date(a.created_at).toLocaleString("pt-PT"),
+      }));
+      const auditRows = (audit || []).map((h) => ({
+        Quando: new Date(h.created_at).toLocaleString("pt-PT"), Quem: h.actor_name || h.actor_email || "",
+        Ação: auditActionLabels[h.action] || h.action, Sobre: auditEntityLabels[h.entity_type] || h.entity_type,
+        Descrição: h.entity_label || "",
+      }));
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, sheetOrPlaceholder(empRows, "Sem funcionários"), "Funcionários");
+      XLSX.utils.book_append_sheet(wb, sheetOrPlaceholder(locRows, "Sem locais"), "Locais");
+      XLSX.utils.book_append_sheet(wb, sheetOrPlaceholder(attRows, "Sem registos de presença"), "Registos");
+      XLSX.utils.book_append_sheet(wb, sheetOrPlaceholder(absRows, "Sem pedidos de falta"), "Faltas");
+      XLSX.utils.book_append_sheet(wb, sheetOrPlaceholder(auditRows, "Sem histórico"), "Histórico");
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `proqual-backup-completo-${stamp}.xlsx`);
+      toast("Cópia de segurança gerada");
+    } catch (err) {
+      console.error(err);
+      toast("Não foi possível gerar a cópia de segurança", true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "💾 Cópia de segurança completa (todos os dados)";
+    }
+  });
+
+  // -----------------------------------------------------------
   // Gestão: resumo mensal por funcionário
   // -----------------------------------------------------------
   function defaultMonthValue() {
@@ -1263,33 +1430,52 @@
     const [year, month] = monthVal.split("-").map(Number);
     const start = new Date(year, month - 1, 1);
     const end = new Date(year, month, 1);
+    const pad = (n) => String(n).padStart(2, "0");
+    const startDateStr = `${year}-${pad(month)}-01`;
+    const endDateStr = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`;
 
-    const { data, error } = await supabase
-      .from("attendance_records")
-      .select("employee_id, direction, created_at, review_status, employees(name, department)")
-      .gte("created_at", start.toISOString())
-      .lt("created_at", end.toISOString())
-      .order("created_at", { ascending: true });
+    const [{ data, error }, { data: absenceData, error: absError }] = await Promise.all([
+      supabase
+        .from("attendance_records")
+        .select("employee_id, direction, created_at, review_status, employees(name, department)")
+        .gte("created_at", start.toISOString())
+        .lt("created_at", end.toISOString())
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("absence_requests")
+        .select("employee_id, absence_date, status, employees(name, department)")
+        .gte("absence_date", startDateStr)
+        .lt("absence_date", endDateStr),
+    ]);
 
     if (error) { console.error(error); box.innerHTML = '<p class="list-empty">Erro ao carregar o resumo.</p>'; return; }
-    if (!data.length) { box.innerHTML = '<p class="list-empty">Sem registos neste mês.</p>'; return; }
+    if (absError) console.error(absError); // não bloqueia o resumo de horas por causa das faltas
 
     // Registos de "Serviço Externo" rejeitados pela Gestão não contam
     // para as horas trabalhadas (a presença não foi confirmada).
-    const validData = data.filter((rec) => rec.review_status !== "rejeitado");
-    if (!validData.length) { box.innerHTML = '<p class="list-empty">Sem registos válidos neste mês.</p>'; return; }
+    const validData = (data || []).filter((rec) => rec.review_status !== "rejeitado");
+    // Só faltas já aprovadas pela Gestão contam como "falta justificada" confirmada.
+    const approvedAbsences = (absenceData || []).filter((req) => req.status === "aprovado");
 
-    // Agrupa por funcionário e emparelha entrada->saída cronologicamente
+    if (!validData.length && !approvedAbsences.length) {
+      box.innerHTML = '<p class="list-empty">Sem registos neste mês.</p>';
+      return;
+    }
+
+    // Agrupa por funcionário — junta registos de presença e faltas
+    // aprovadas, para dar o panorama completo do mês.
     const byEmployee = new Map();
-    validData.forEach((rec) => {
-      if (!byEmployee.has(rec.employee_id)) {
-        byEmployee.set(rec.employee_id, {
-          name: rec.employees?.name || "—",
-          department: rec.employees?.department || "—",
-          records: [],
-        });
+    function ensureEmployee(id, name, department) {
+      if (!byEmployee.has(id)) {
+        byEmployee.set(id, { name: name || "—", department: department || "—", records: [], absenceDays: new Set() });
       }
-      byEmployee.get(rec.employee_id).records.push(rec);
+      return byEmployee.get(id);
+    }
+    validData.forEach((rec) => {
+      ensureEmployee(rec.employee_id, rec.employees?.name, rec.employees?.department).records.push(rec);
+    });
+    approvedAbsences.forEach((req) => {
+      ensureEmployee(req.employee_id, req.employees?.name, req.employees?.department).absenceDays.add(req.absence_date);
     });
 
     const summaries = [];
@@ -1312,6 +1498,7 @@
         hours: totalMs / 3600000,
         days: days.size,
         incomplete: !!openEntrada,
+        absenceDays: emp.absenceDays.size,
       });
     });
 
@@ -1319,12 +1506,13 @@
 
     box.innerHTML = "";
     summaries.forEach((s) => {
+      const absenceTag = s.absenceDays ? ` · 🗓️ ${s.absenceDays} falta(s) justificada(s)` : "";
       const div = document.createElement("div");
       div.className = "summary-card";
       div.innerHTML = `
         <div>
           <div class="s-name">${escapeHtml(s.name)}</div>
-          <div class="s-sub">${escapeHtml(s.department)} · ${s.days} dia(s) com registo${s.incomplete ? " · ⚠️ tem uma entrada sem saída" : ""}</div>
+          <div class="s-sub">${escapeHtml(s.department)} · ${s.days} dia(s) com registo${s.incomplete ? " · ⚠️ tem uma entrada sem saída" : ""}${absenceTag}</div>
         </div>
         <div class="s-hours">${s.hours.toFixed(1)}h<small>total no mês</small></div>
       `;
@@ -1333,6 +1521,258 @@
   }
 
   document.querySelector('[data-tab="resumo"]').addEventListener("click", loadMonthlySummary);
+
+  // -----------------------------------------------------------
+  // Gestão: Ponto Individual — folha de ponto dia a dia por
+  // funcionário, com exportação em Excel e PDF.
+  // -----------------------------------------------------------
+  const individualEmployeeSelect = document.getElementById("individual-employee-select");
+  const individualMonthInput = document.getElementById("individual-month");
+  if (!individualMonthInput.value) individualMonthInput.value = defaultMonthValue();
+  individualEmployeeSelect.addEventListener("change", loadIndividualTimesheet);
+  individualMonthInput.addEventListener("change", loadIndividualTimesheet);
+  document.querySelector('[data-tab="individual"]').addEventListener("click", () => {
+    if (individualEmployeeSelect.value) loadIndividualTimesheet();
+  });
+
+  async function loadIndividualTimesheet() {
+    const box = document.getElementById("individual-timesheet-list");
+    const exportXlsxBtn = document.getElementById("individual-export-xlsx-btn");
+    const exportPdfBtn = document.getElementById("individual-export-pdf-btn");
+    const empId = individualEmployeeSelect.value;
+
+    if (!empId) {
+      box.innerHTML = '<p class="list-empty">Escolhe um funcionário para ver a folha de ponto do mês.</p>';
+      exportXlsxBtn.hidden = true;
+      exportPdfBtn.hidden = true;
+      state.individualTimesheet = null;
+      return;
+    }
+
+    box.innerHTML = '<p class="list-empty">A carregar…</p>';
+    const monthVal = individualMonthInput.value || defaultMonthValue();
+    const [year, month] = monthVal.split("-").map(Number);
+    const start = new Date(year, month - 1, 1);
+    const end = new Date(year, month, 1);
+    const pad = (n) => String(n).padStart(2, "0");
+    const startDateStr = `${year}-${pad(month)}-01`;
+    const endDateStr = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`;
+
+    const [{ data, error }, { data: absenceData, error: absError }] = await Promise.all([
+      supabase
+        .from("attendance_records")
+        .select("direction, created_at, review_status, employee_id, tasks")
+        .eq("employee_id", empId)
+        .gte("created_at", start.toISOString())
+        .lt("created_at", end.toISOString())
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("absence_requests")
+        .select("absence_date, status, reason, employee_id")
+        .eq("employee_id", empId)
+        .gte("absence_date", startDateStr)
+        .lt("absence_date", endDateStr),
+    ]);
+
+    if (error) { console.error(error); box.innerHTML = '<p class="list-empty">Erro ao carregar a folha de ponto.</p>'; return; }
+    if (absError) console.error(absError); // não bloqueia a folha de ponto por causa das faltas
+
+    const validData = (data || []).filter((rec) => rec.review_status !== "rejeitado");
+    const approvedAbsences = (absenceData || []).filter((req) => req.status === "aprovado");
+    const employee = state.dashboard.employees.find((e) => e.id === empId);
+
+    // Agrupa os registos de presença por dia, emparelhando cada
+    // entrada com a saída seguinte (mesma lógica do Resumo mensal,
+    // mas atribuída ao dia da entrada).
+    const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const dayMap = new Map();
+    let openEntrada = null;
+    validData.forEach((rec) => {
+      const t = new Date(rec.created_at);
+      if (rec.direction === "entrada") {
+        openEntrada = t;
+      } else if (rec.direction === "saida" && openEntrada) {
+        const key = ymd(openEntrada);
+        const entry = dayMap.get(key) || { entrada: null, saida: null, hours: 0, incomplete: false, tasks: null };
+        if (!entry.entrada) entry.entrada = openEntrada;
+        entry.saida = t;
+        entry.hours += (t - openEntrada) / 3600000;
+        if (Array.isArray(rec.tasks) && rec.tasks.length) entry.tasks = rec.tasks;
+        dayMap.set(key, entry);
+        openEntrada = null;
+      }
+    });
+    if (openEntrada) {
+      const key = ymd(openEntrada);
+      const entry = dayMap.get(key) || { entrada: null, saida: null, hours: 0, incomplete: false, tasks: null };
+      if (!entry.entrada) entry.entrada = openEntrada;
+      entry.incomplete = true;
+      dayMap.set(key, entry);
+    }
+
+    const absenceMap = new Map();
+    approvedAbsences.forEach((req) => absenceMap.set(req.absence_date, req.reason));
+
+    const allDates = new Set([...dayMap.keys(), ...absenceMap.keys()]);
+    const timeFmt = (d) => d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
+    const rows = [...allDates].sort().map((date) => {
+      const att = dayMap.get(date);
+      const absenceReason = absenceMap.get(date);
+      const situacaoParts = [];
+      if (absenceReason) situacaoParts.push(`Falta justificada — ${absenceReasonLabel(absenceReason)}`);
+      if (att?.incomplete) situacaoParts.push("⚠️ Sem saída registada");
+      return {
+        date,
+        dateLabel: new Date(date + "T00:00:00").toLocaleDateString("pt-PT"),
+        entrada: att?.entrada ? timeFmt(att.entrada) : "",
+        saida: att?.saida ? timeFmt(att.saida) : "",
+        hours: att?.hours || 0,
+        incomplete: !!att?.incomplete,
+        isAbsence: !att && !!absenceReason,
+        tarefas: formatTasksSummary(att?.tasks),
+        situacao: situacaoParts.join(" · "),
+      };
+    });
+
+    const totalHours = rows.reduce((sum, r) => sum + r.hours, 0);
+    const totalDays = rows.filter((r) => !r.isAbsence).length;
+    const totalAbsences = rows.filter((r) => r.isAbsence || (r.situacao && r.situacao.startsWith("Falta"))).length;
+
+    state.individualTimesheet = {
+      employeeId: empId,
+      employeeName: employee?.name || "—",
+      employeeDept: employee?.department || "—",
+      monthVal,
+      rows,
+      totalHours,
+      totalDays,
+      totalAbsences,
+    };
+
+    renderIndividualTimesheet();
+    exportXlsxBtn.hidden = rows.length === 0;
+    exportPdfBtn.hidden = rows.length === 0;
+  }
+
+  function renderIndividualTimesheet() {
+    const box = document.getElementById("individual-timesheet-list");
+    const ts = state.individualTimesheet;
+    if (!ts || !ts.rows.length) {
+      box.innerHTML = '<p class="list-empty">Sem registos nem faltas aprovadas neste mês.</p>';
+      return;
+    }
+    const rowsHtml = ts.rows.map((r) => {
+      const cls = [r.isAbsence ? "ts-absence" : "", r.incomplete ? "ts-incomplete" : ""].filter(Boolean).join(" ");
+      return `
+        <tr class="${cls}">
+          <td>${r.dateLabel}</td>
+          <td>${r.entrada || "—"}</td>
+          <td>${r.saida || "—"}</td>
+          <td>${r.hours ? r.hours.toFixed(1) + "h" : "—"}</td>
+          <td class="ts-note">${escapeHtml(r.tarefas || "")}</td>
+          <td class="ts-note">${escapeHtml(r.situacao || "")}</td>
+        </tr>
+      `;
+    }).join("");
+    box.innerHTML = `
+      <div class="timesheet-summary">
+        <div><strong>${ts.totalHours.toFixed(1)}h</strong>total no mês</div>
+        <div><strong>${ts.totalDays}</strong>dia(s) com registo</div>
+        <div><strong>${ts.totalAbsences}</strong>falta(s) justificada(s)</div>
+      </div>
+      <div class="timesheet-table-wrap">
+        <table class="timesheet-table">
+          <thead><tr><th>Data</th><th>Entrada</th><th>Saída</th><th>Horas</th><th>Tarefas</th><th>Situação</th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function individualMonthLabel(monthVal) {
+    const [y, m] = monthVal.split("-").map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString("pt-PT", { month: "long", year: "numeric" });
+  }
+
+  document.getElementById("individual-export-xlsx-btn").addEventListener("click", () => {
+    const ts = state.individualTimesheet;
+    if (!ts) return;
+    const monthLabel = individualMonthLabel(ts.monthVal);
+    const now = new Date();
+    const headerLines = [[cfg.COMPANY_NAME || "PROQUAL Engenheiros e Associados, Lda"]];
+    if (cfg.COMPANY_TAGLINE) headerLines.push([cfg.COMPANY_TAGLINE]);
+    if (cfg.COMPANY_NUIT) headerLines.push([`NUIT: ${cfg.COMPANY_NUIT}`]);
+    if (cfg.COMPANY_ADDRESS) headerLines.push([cfg.COMPANY_ADDRESS]);
+    headerLines.push([`Folha de Ponto Individual — ${ts.employeeName} (${ts.employeeDept})`]);
+    headerLines.push([`Mês: ${monthLabel}`]);
+    headerLines.push([`Documento gerado automaticamente pelo sistema ${cfg.APP_TITLE} em ${now.toLocaleString("pt-PT")}`]);
+    headerLines.push([]);
+
+    const columns = ["Data", "Entrada", "Saída", "Horas", "Tarefas", "Situação"];
+    const dataRows = ts.rows.map((r) => [r.dateLabel, r.entrada || "", r.saida || "", r.hours ? Number(r.hours.toFixed(2)) : "", r.tarefas || "", r.situacao || ""]);
+    const totalsRow = ["", "", "Total", Number(ts.totalHours.toFixed(2)), "", `${ts.totalAbsences} falta(s) justificada(s)`];
+    const aoa = [...headerLines, columns, ...dataRows, [], totalsRow];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Folha de Ponto");
+    const safeName = ts.employeeName.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9]+/g, "-");
+    XLSX.writeFile(wb, `folha-ponto-${safeName}-${ts.monthVal}.xlsx`);
+  });
+
+  document.getElementById("individual-export-pdf-btn").addEventListener("click", () => {
+    const ts = state.individualTimesheet;
+    if (!ts) return;
+    try {
+      const monthLabel = individualMonthLabel(ts.monthVal);
+      const now = new Date();
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: "portrait", unit: "pt" });
+
+      let y = 40;
+      doc.setFontSize(14);
+      doc.text(cfg.COMPANY_NAME || "PROQUAL Engenheiros e Associados, Lda", 40, y);
+      y += 18;
+      doc.setFontSize(9);
+      if (cfg.COMPANY_TAGLINE) { doc.text(cfg.COMPANY_TAGLINE, 40, y); y += 14; }
+      if (cfg.COMPANY_NUIT) { doc.text(`NUIT: ${cfg.COMPANY_NUIT}`, 40, y); y += 14; }
+      if (cfg.COMPANY_ADDRESS) { doc.text(cfg.COMPANY_ADDRESS, 40, y); y += 14; }
+      y += 10;
+      doc.setFontSize(12);
+      doc.text(`Folha de Ponto Individual — ${ts.employeeName} (${ts.employeeDept})`, 40, y);
+      y += 16;
+      doc.setFontSize(10);
+      doc.text(`Mês: ${monthLabel}`, 40, y);
+      y += 14;
+      doc.setFontSize(8);
+      doc.text(`Documento gerado automaticamente pelo sistema ${cfg.APP_TITLE} em ${now.toLocaleString("pt-PT")}`, 40, y);
+      y += 16;
+
+      doc.autoTable({
+        startY: y,
+        head: [["Data", "Entrada", "Saída", "Horas", "Tarefas", "Situação"]],
+        body: ts.rows.map((r) => [r.dateLabel, r.entrada || "—", r.saida || "—", r.hours ? r.hours.toFixed(1) + "h" : "—", r.tarefas || "", r.situacao || ""]),
+        foot: [["", "", "Total", `${ts.totalHours.toFixed(1)}h`, "", `${ts.totalAbsences} falta(s) justificada(s)`]],
+        styles: { fontSize: 8, cellPadding: 4 },
+        headStyles: { fillColor: [30, 41, 59] },
+        footStyles: { fillColor: [240, 240, 240], textColor: [20, 20, 20] },
+        margin: { left: 40, right: 40 },
+      });
+
+      const finalY = (doc.lastAutoTable && doc.lastAutoTable.finalY) || y + 40;
+      const sigY = finalY + 50;
+      doc.setFontSize(9);
+      doc.text("_______________________________", 40, sigY);
+      doc.text("Assinatura do Funcionário", 40, sigY + 14);
+      doc.text("_______________________________", 320, sigY);
+      doc.text("Assinatura da Gestão", 320, sigY + 14);
+
+      const safeName = ts.employeeName.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9]+/g, "-");
+      doc.save(`folha-ponto-${safeName}-${ts.monthVal}.pdf`);
+    } catch (err) {
+      console.error(err);
+      toast("Não foi possível gerar o PDF", true);
+    }
+  });
 
   // -----------------------------------------------------------
   // Utilitário
