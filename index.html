@@ -231,6 +231,7 @@
       <button class="tab-btn" data-tab="historico">Histórico</button>
       <button class="tab-btn" data-tab="employees">Funcionários</button>
       <button class="tab-btn" data-tab="locations">Obras/Escritório</button>
+      <button class="tab-btn" data-tab="conta">Conta</button>
     </div>
 
     <!-- Tab: Records -->
@@ -322,6 +323,19 @@
         <button class="btn btn--accent" id="admin-add-location-btn">Adicionar</button>
       </div>
       <div class="list" id="admin-location-list"></div>
+    </div>
+
+    <!-- Tab: Conta (trocar palavra-passe) -->
+    <div class="tab-panel" data-tab-panel="conta">
+      <div class="admin-add-row" style="max-width:360px;">
+        <p class="muted" style="font-size:13px;">Sessão iniciada como <strong id="conta-email">—</strong>. Usa este formulário para trocar a tua palavra-passe — por exemplo, se suspeitares que alguém a possa ter visto.</p>
+        <input class="text-input" id="conta-current-password" type="password" placeholder="Palavra-passe atual" autocomplete="current-password" />
+        <input class="text-input" id="conta-new-password" type="password" placeholder="Nova palavra-passe (mín. 8 caracteres)" autocomplete="new-password" />
+        <input class="text-input" id="conta-confirm-password" type="password" placeholder="Confirmar nova palavra-passe" autocomplete="new-password" />
+        <p class="error-text" id="conta-password-error" hidden></p>
+        <p class="success-text" id="conta-password-success" hidden></p>
+        <button class="btn btn--accent" id="conta-change-password-btn">Alterar palavra-passe</button>
+      </div>
     </div>
   </section>
 

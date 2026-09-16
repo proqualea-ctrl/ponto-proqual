@@ -110,6 +110,13 @@ projeto que já está a funcionar. Não é preciso recomeçar do zero.
     tarefas ficam visíveis no registo em **Registos**, no separador
     **Ponto Individual** (nova coluna "Tarefas"), e são incluídas tanto
     na **Exportação para Excel** como na **Cópia de segurança completa**.
+18. **Alterar palavra-passe (tab "Conta")** — novo separador na Gestão,
+    disponível para administradores e encarregados, onde cada pessoa pode
+    trocar a própria palavra-passe sem precisar de entrar no Supabase.
+    Pede a palavra-passe atual (para confirmar que és mesmo tu, mesmo com
+    a sessão já iniciada), a nova, e a confirmação — útil, por exemplo,
+    se suspeitares que alguém possa ter visto a tua password. A troca
+    fica registada na tab **Histórico**.
 
 ---
 
@@ -329,7 +336,12 @@ subpastas). Para atualizar:
      tiveres aprovado); testa os botões **Exportar Excel** e
      **Exportar PDF** dessa tab — o PDF deve sair já com cabeçalho da
      empresa, tabela e linhas de assinatura;
-   - (se fores admin) consegues **Editar**/**Apagar** um registo.
+   - (se fores admin) consegues **Editar**/**Apagar** um registo;
+   - a tab **Conta** mostra o teu email e permite trocar a palavra-passe:
+     testa com a palavra-passe atual errada (deve recusar), com a
+     confirmação diferente da nova (deve recusar), e por fim com tudo
+     certo (deve confirmar sucesso); depois sai e volta a entrar já com
+     a nova palavra-passe para confirmares que ficou mesmo trocada.
 
 ---
 

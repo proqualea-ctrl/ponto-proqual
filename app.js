@@ -710,7 +710,90 @@
     await supabase.auth.signOut();
     state.session = null;
     state.role = null;
+    ["conta-current-password", "conta-new-password", "conta-confirm-password"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    });
+    ["conta-password-error", "conta-password-success"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.hidden = true;
+    });
     showScreen("home");
+  });
+
+  // -----------------------------------------------------------
+  // Gestão: alterar a própria palavra-passe (tab "Conta")
+  // -----------------------------------------------------------
+  document.getElementById("conta-change-password-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("conta-change-password-btn");
+    const errEl = document.getElementById("conta-password-error");
+    const okEl = document.getElementById("conta-password-success");
+    errEl.hidden = true;
+    okEl.hidden = true;
+
+    const currentPassword = document.getElementById("conta-current-password").value;
+    const newPassword = document.getElementById("conta-new-password").value;
+    const confirmPassword = document.getElementById("conta-confirm-password").value;
+    const email = state.session?.user?.email;
+
+    if (!email) { errEl.textContent = "Sessão inválida — volta a entrar."; errEl.hidden = false; return; }
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      errEl.textContent = "Preenche os três campos.";
+      errEl.hidden = false;
+      return;
+    }
+    if (newPassword.length < 8) {
+      errEl.textContent = "A nova palavra-passe deve ter pelo menos 8 caracteres.";
+      errEl.hidden = false;
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      errEl.textContent = "A confirmação não coincide com a nova palavra-passe.";
+      errEl.hidden = false;
+      return;
+    }
+    if (newPassword === currentPassword) {
+      errEl.textContent = "A nova palavra-passe tem de ser diferente da atual.";
+      errEl.hidden = false;
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "A verificar…";
+    try {
+      // Confirma a palavra-passe atual antes de trocar — mesmo com a
+      // sessão já iniciada, isto evita que alguém troque a password a
+      // partir de uma sessão esquecida aberta sem saber a atual.
+      const { error: verifyError } = await supabase.auth.signInWithPassword({ email, password: currentPassword });
+      if (verifyError) {
+        errEl.textContent = "Palavra-passe atual incorreta.";
+        errEl.hidden = false;
+        return;
+      }
+
+      btn.textContent = "A alterar…";
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateError) {
+        errEl.textContent = "Não foi possível alterar a palavra-passe. Tenta novamente.";
+        errEl.hidden = false;
+        return;
+      }
+
+      document.getElementById("conta-current-password").value = "";
+      document.getElementById("conta-new-password").value = "";
+      document.getElementById("conta-confirm-password").value = "";
+      okEl.textContent = "Palavra-passe alterada com sucesso.";
+      okEl.hidden = false;
+      toast("Palavra-passe alterada");
+      logAudit("seguranca", "conta", state.session?.user?.id, email);
+    } catch (err) {
+      console.error(err);
+      errEl.textContent = "Erro inesperado. Tenta novamente.";
+      errEl.hidden = false;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Alterar palavra-passe";
+    }
   });
 
   // -----------------------------------------------------------
@@ -765,6 +848,9 @@
   }
 
   function applyRoleUI() {
+    const contaEmailEl = document.getElementById("conta-email");
+    if (contaEmailEl) contaEmailEl.textContent = state.session?.user?.email || "—";
+
     const badge = document.getElementById("role-badge");
     if (state.role) {
       badge.hidden = false;
@@ -1144,8 +1230,8 @@
   // -----------------------------------------------------------
   // Gestão: histórico de alterações (tab "Histórico")
   // -----------------------------------------------------------
-  const auditActionLabels = { editar: "✏️ Editou", apagar: "🗑 Apagou", aprovar: "✅ Aprovou", rejeitar: "❌ Rejeitou" };
-  const auditEntityLabels = { presenca: "um registo de presença", falta: "um pedido de falta" };
+  const auditActionLabels = { editar: "✏️ Editou", apagar: "🗑 Apagou", aprovar: "✅ Aprovou", rejeitar: "❌ Rejeitou", seguranca: "🔒 Alterou" };
+  const auditEntityLabels = { presenca: "um registo de presença", falta: "um pedido de falta", conta: "a própria palavra-passe" };
 
   async function loadAuditLog() {
     const box = document.getElementById("audit-list");

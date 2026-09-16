@@ -305,6 +305,7 @@ body {
 /* ---------- Admin login ---------- */
 .admin-login-box { padding-top: 8vh; max-width: 340px; margin: 0 auto; }
 .error-text { color: var(--red); font-size: 13px; margin: -6px 0 12px; }
+.success-text { color: var(--green); font-size: 13px; margin: -6px 0 12px; }
 
 /* ---------- Admin dashboard ---------- */
 .tabs { display: flex; gap: 8px; margin-bottom: 18px; }
