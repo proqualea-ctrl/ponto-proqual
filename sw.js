@@ -2,7 +2,14 @@
 // Faz cache só da casca da aplicação (HTML/CSS/JS/ícones), nunca dos
 // pedidos ao Supabase — esses vão sempre à rede, para os dados serem
 // sempre atuais.
-const CACHE_NAME = "ponto-proqual-shell-v2";
+//
+// IMPORTANTE: sempre que se muda index.html/app.js/style.css/config.js,
+// é preciso subir a versão deste número (ex: v3 -> v4) e voltar a subir
+// este ficheiro ao GitHub também. Sem isso, o browser não deteta que o
+// service worker mudou, continua a usar a cache antiga, e quem já tem a
+// app aberta/instalada não vê as novidades (mesmo depois de o site já
+// estar atualizado no GitHub) até fechar e reabrir várias vezes.
+const CACHE_NAME = "ponto-proqual-shell-v3";
 const SHELL_FILES = [
   "./",
   "./index.html",

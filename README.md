@@ -250,10 +250,14 @@ subpastas). Para atualizar:
 1. Abre o repositório em **https://github.com/proqualea-ctrl/ponto-proqual**
 2. Para cada ficheiro deste pacote, usa **Add file → Upload files** (ou edita
    cada um individualmente) e substitui o ficheiro existente pelo novo:
-   - `index.html`, `style.css`, `app.js` — obrigatório substituir
-   - `manifest.json`, `sw.js` — ficheiros novos (PWA)
+   - `index.html`, `style.css`, `app.js` — obrigatório substituir sempre
+   - `sw.js` — **também obrigatório substituir sempre**, em toda e
+     qualquer atualização (não só na primeira vez) — ver aviso importante
+     logo a seguir.
+   - `manifest.json` — normalmente só muda na primeira instalação da PWA,
+     mas não há problema nenhum em substituir sempre também.
    - `logo.png`, `icon-192.png`, `icon-512.png`, `icon-apple-touch.png`,
-     `favicon.png` — ficheiros novos (marca/ícones)
+     `favicon.png` — só mudam se um dia atualizares a marca/ícones.
    - `config.js` — **já vem com os teus valores reais preenchidos** (o
      mesmo URL e chave que já estavam no site); podes substituir sem
      medo de perder a ligação ao Supabase. Se quiseres que o NUIT e a
@@ -269,6 +273,21 @@ subpastas). Para atualizar:
 > Nota: como todos os ficheiros estão na raiz do repositório (sem pastas
 > `css/`/`js/`), basta arrastar os ficheiros deste pacote para a raiz e
 > confirmar que substituem os antigos com o mesmo nome.
+
+> ⚠️ **Importante — porque é que às vezes "não aparece nada" depois de
+> atualizar:** a app funciona como PWA (é instalável) e por isso guarda
+> uma cópia dos ficheiros no telemóvel/navegador para funcionar mais
+> depressa e offline. Isto significa que, mesmo depois de o site já
+> estar atualizado no GitHub, quem já tinha a app aberta ou instalada
+> pode continuar a ver a versão antiga durante algum tempo. Corrigi isto
+> nesta versão (o `sw.js` agora tem um número de versão que sobe a cada
+> atualização, o que obriga o telemóvel a ir buscar tudo de novo) — mas
+> para isto funcionar, o `sw.js` tem mesmo de ser substituído no GitHub
+> em **todas** as atualizações futuras, não só nesta. Se depois de
+> atualizares (e substituíres o `sw.js`) ainda não vires as novidades,
+> fecha a app por completo e volta a abri-la (no telemóvel, ou faz um
+> refresh "forçado" no computador — normalmente Ctrl+Shift+R ou
+> Cmd+Shift+R).
 
 ## 3. Testar
 
