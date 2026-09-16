@@ -211,13 +211,3 @@ create policy "audit_insert_auth" on public.audit_log
 drop policy if exists "audit_select_auth" on public.audit_log;
 create policy "audit_select_auth" on public.audit_log
   for select to authenticated using (true);
-
--- -------------------------------------------------------------
--- 7) Tarefas realizadas no turno (preenchidas na Saída)
--- -------------------------------------------------------------
--- Lista de { description, percent } em JSON, ex.:
--- [{"description":"Instalação elétrica","percent":40}, ...].
--- Fica a null nos registos de Entrada (não se pede tarefas nesse
--- momento) e continua opcional na Saída.
-alter table public.attendance_records
-  add column if not exists tasks jsonb;

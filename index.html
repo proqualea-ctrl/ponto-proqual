@@ -174,13 +174,6 @@
 
     <input class="text-input" id="confirm-note" placeholder="Nota (opcional) — ex: Finanças, entrega de documentos" autocomplete="off" />
 
-    <div class="tasks-section" id="tasks-section" hidden>
-      <p class="muted" style="font-size:13px; margin:8px 0 8px;">Tarefas realizadas neste turno — indica o que fizeste e, se possível, quanto tempo (%) levou cada uma.</p>
-      <div id="tasks-list"></div>
-      <button class="link-action" id="tasks-add-btn" type="button">+ Adicionar tarefa</button>
-      <p class="tasks-total" id="tasks-total"></p>
-    </div>
-
     <div class="btn-row">
       <button class="btn btn--ghost" id="retake-photo-btn" hidden>Repetir foto</button>
       <button class="btn btn--accent btn--wide" id="capture-btn">Tirar foto e registar</button>
@@ -226,7 +219,6 @@
     <div class="tabs">
       <button class="tab-btn is-active" data-tab="records">Registos</button>
       <button class="tab-btn" data-tab="resumo">Resumo</button>
-      <button class="tab-btn" data-tab="individual">Ponto Individual</button>
       <button class="tab-btn" data-tab="faltas">Faltas</button>
       <button class="tab-btn" data-tab="historico">Histórico</button>
       <button class="tab-btn" data-tab="employees">Funcionários</button>
@@ -241,7 +233,6 @@
         <input class="text-input text-input--sm" id="filter-date" type="date" />
       </div>
       <button class="link-action" id="export-xlsx-btn">⬇ Exportar para Excel</button>
-      <button class="link-action" id="export-backup-btn" hidden>💾 Cópia de segurança completa (todos os dados)</button>
       <div class="list" id="records-list"></div>
     </div>
 
@@ -251,19 +242,6 @@
         <input class="text-input text-input--sm" id="resumo-month" type="month" />
       </div>
       <div class="list" id="resumo-list"></div>
-    </div>
-
-    <!-- Tab: Ponto individual (folha de ponto por funcionário) -->
-    <div class="tab-panel" data-tab-panel="individual">
-      <div class="filters">
-        <select class="text-input text-input--sm" id="individual-employee-select"><option value="">Escolher funcionário…</option></select>
-        <input class="text-input text-input--sm" id="individual-month" type="month" />
-      </div>
-      <button class="link-action" id="individual-export-xlsx-btn" hidden>⬇ Exportar Excel (folha de ponto)</button>
-      <button class="link-action" id="individual-export-pdf-btn" hidden>⬇ Exportar PDF (folha de ponto)</button>
-      <div class="list" id="individual-timesheet-list">
-        <p class="list-empty">Escolhe um funcionário para ver a folha de ponto do mês.</p>
-      </div>
     </div>
 
     <!-- Tab: Faltas -->
@@ -354,8 +332,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
 </body>

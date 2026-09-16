@@ -31,8 +31,7 @@ projeto que já está a funcionar. Não é preciso recomeçar do zero.
 5. **Exportar para Excel** — na área de Gestão, tab "Registos", botão
    "Exportar para Excel" gera um ficheiro `.xlsx` com os registos filtrados.
 6. **Resumo mensal por funcionário** — novo separador "Resumo" com o total
-   de horas e dias trabalhados por funcionário, num mês à escolha (inclui
-   também as faltas já aprovadas nesse mês — ver item 14).
+   de horas e dias trabalhados por funcionário, num mês à escolha.
 7. **Editar/apagar registos** — cada registo tem agora botões "Editar" e
    "Apagar" (só visíveis para administradores) para corrigir enganos.
 8. **Dois níveis de acesso na Gestão**:
@@ -74,42 +73,6 @@ projeto que já está a funcionar. Não é preciso recomeçar do zero.
     registo seja apagado depois, a entrada no Histórico mantém-se, e não
     existe forma de editar ou apagar uma entrada do Histórico pela app
     (nem um administrador consegue).
-14. **Faltas no Resumo mensal** — as faltas já **aprovadas** pela Gestão
-    passam a contar no separador "Resumo": cada funcionário com falta
-    justificada nesse mês mostra uma linha extra, ex: "🗓️ 1 falta(s)
-    justificada(s)". Faltas ainda pendentes ou rejeitadas não aparecem
-    aqui (só depois de aprovadas é que contam como confirmadas).
-15. **Cópia de segurança completa** — na tab "Registos", novo botão
-    "💾 Cópia de segurança completa (todos os dados)" (só administradores)
-    gera, com um clique, um único ficheiro `.xlsx` com **todos** os dados
-    da app em separadores distintos: Funcionários, Locais, Registos
-    (presenças), Faltas e Histórico. Pensado como cópia de segurança
-    independente do Supabase — vale a pena gerar uma de vez em quando e
-    guardá-la num sítio seguro (ex: uma pasta na cloud da empresa), como
-    salvaguarda extra além dos backups automáticos do Supabase.
-16. **Ponto Individual (folha de ponto por funcionário)** — novo separador
-    "Ponto Individual" na Gestão: escolhe um funcionário e um mês e vês a
-    folha de ponto desse funcionário dia a dia — hora de entrada, hora de
-    saída, horas trabalhadas nesse dia, e as faltas já aprovadas nesse mês
-    ("Falta justificada — Doença", etc.), com o total de horas, dias
-    trabalhados e faltas no topo. A partir daí é possível **exportar em
-    Excel** ou em **PDF já formatado como folha de ponto oficial**
-    (cabeçalho institucional + tabela + linhas de assinatura do
-    funcionário e da Gestão), pronta a imprimir e assinar. Disponível
-    para administradores e encarregados (só ver/exportar, tal como o
-    Resumo mensal).
-17. **Descrição das tarefas na Saída** — depois de tirar a foto para
-    marcar **Saída** (só na saída, não na entrada), aparece uma secção
-    "Tarefas realizadas neste turno" onde o funcionário descreve o que
-    fez e, se possível, indica quanto tempo levou cada tarefa em
-    percentagem (ex: "Instalação elétrica — 60%", "Reunião com cliente —
-    40%"), com um botão para adicionar mais tarefas e um total que ajuda
-    a confirmar que chega aos 100%. É obrigatório indicar pelo menos uma
-    tarefa para poder confirmar a saída (a percentagem em si é opcional,
-    mas ajuda a Gestão a perceber como o tempo foi distribuído). As
-    tarefas ficam visíveis no registo em **Registos**, no separador
-    **Ponto Individual** (nova coluna "Tarefas"), e são incluídas tanto
-    na **Exportação para Excel** como na **Cópia de segurança completa**.
 
 ---
 
@@ -126,7 +89,6 @@ preciso apagar nada**. Só falta acrescentar as tabelas/colunas novas:
 Isto acrescenta: colunas de geofencing em `locations` e `attendance_records`,
 a tabela `admin_profiles` (níveis de acesso), a tabela `absence_requests`
 (justificação de faltas), a tabela `audit_log` (histórico de alterações),
-a coluna `tasks` em `attendance_records` (descrição das tarefas na Saída),
 e atualiza as permissões para só o `admin` poder editar/apagar. Podes
 correr este ficheiro mais do que uma vez sem problema (não duplica nada).
 
@@ -278,38 +240,16 @@ subpastas). Para atualizar:
    iPhone/Safari, instala-se por **Partilhar → Adicionar ao ecrã principal**).
 3. Testa o fluxo normal (**SOU FUNCIONÁRIO** → escolher/criar → **Entrada**
    ou **Saída** → foto → confirmar) e confirma que aparece o aviso de
-   localização se estiveres longe do local escolhido. Ao marcar **Saída**,
-   depois de tirares a foto deve aparecer a secção "Tarefas realizadas
-   neste turno" — tenta confirmar sem escrever nenhuma tarefa (deve
-   avisar que é preciso indicar pelo menos uma) e depois preenche uma ou
-   mais tarefas com percentagem antes de confirmar; ao marcar **Entrada**
-   essa secção não deve aparecer.
+   localização se estiveres longe do local escolhido.
 4. Testa também **"JUSTIFICAR FALTA"** a partir do ecrã inicial: escolhe um
    funcionário, indica data e motivo, envia — deve aparecer uma mensagem a
    confirmar que ficou pendente de aprovação.
 5. Entra em **GESTÃO** com a tua conta e confirma:
    - o crachá ao lado de "GESTÃO" mostra "Administrador" ou "Encarregado";
-   - a tab **Resumo** mostra horas por funcionário no mês atual — depois de
-     aprovares uma falta (ver abaixo), o funcionário correspondente deve
-     mostrar também "🗓️ N falta(s) justificada(s)";
+   - a tab **Resumo** mostra horas por funcionário no mês atual;
    - a tab **Faltas** mostra o pedido que acabaste de enviar como
      "⏳ Pendente", e (se fores admin) consegues **Aprovar**/**Rejeitar**;
-   - a tab **Histórico** mostra as ações que acabaste de fazer (aprovar,
-     editar, apagar);
-   - a tab **Registos** mostra o registo de Saída que acabaste de enviar
-     com a lista de tarefas que escreveste (ex: "🛠️ Instalação elétrica
-     (60%), Reunião com cliente (40%)");
-   - o botão **Exportar para Excel** descarrega um `.xlsx` (agora com uma
-     coluna "Tarefas");
-   - (se fores admin) o botão **💾 Cópia de segurança completa** descarrega
-     um `.xlsx` com vários separadores (Funcionários, Locais, Registos,
-     Faltas, Histórico) — não deve aparecer para uma conta "Encarregado";
-   - a tab **Ponto Individual**: escolhe um funcionário e o mês atual e
-     confirma que aparece a folha de ponto dia a dia (entrada, saída,
-     horas, as tarefas dessa saída, e a falta aprovada acima, se já a
-     tiveres aprovado); testa os botões **Exportar Excel** e
-     **Exportar PDF** dessa tab — o PDF deve sair já com cabeçalho da
-     empresa, tabela e linhas de assinatura;
+   - o botão **Exportar para Excel** descarrega um `.xlsx`;
    - (se fores admin) consegues **Editar**/**Apagar** um registo.
 
 ---
@@ -359,9 +299,3 @@ migration_v2.sql     # migração aditiva para o projeto já existente
 - As fotos continuam num bucket público por defeito (só quem tem o link
   direto da foto a vê). Se quiseres torná-las privadas, é só ajustar o
   `schema.sql`/`migration_v2.sql` — diz-me e faço essa alteração.
-- Correção nesta versão: alguns botões marcados como "só para
-  administradores" (ex: 💾 Cópia de segurança completa, adicionar
-  funcionário/local) ficavam tecnicamente escondidos para uma conta
-  "Encarregado" mas continuavam visíveis no ecrã por um pormenor de CSS —
-  a base de dados já bloqueava sempre a ação em si (nunca foi possível
-  usá-los sem ser admin), mas agora também ficam corretamente invisíveis.

@@ -67,11 +67,6 @@ create table if not exists public.attendance_records (
   distance_m double precision,     -- distância calculada até ao local escolhido
   within_geofence boolean,         -- se ficou dentro do raio definido para o local
   note text,                       -- nota livre do funcionário (ex: "Finanças, entrega de documentos")
-  -- Tarefas realizadas no turno, preenchidas pelo funcionário ao marcar
-  -- Saída: lista de { description, percent } em JSON, ex:
-  -- [{"description":"Instalação elétrica","percent":40}, ...]. Fica a
-  -- null nos registos de Entrada (não se pede tarefas nesse momento).
-  tasks jsonb,
   -- Estado de aprovação: só usado para locais do tipo 'externo' (sem
   -- geofencing) — a Gestão confirma manualmente se o funcionário esteve
   -- mesmo no sítio. Fica a null para registos normais em obra/escritório.
