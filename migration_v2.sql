@@ -221,3 +221,33 @@ create policy "audit_select_auth" on public.audit_log
 -- momento) e continua opcional na Saída.
 alter table public.attendance_records
   add column if not exists tasks jsonb;
+
+-- -------------------------------------------------------------
+-- 8) Correção: alargar o audit_log para aceitar o registo de
+-- alterações de segurança (trocar a própria palavra-passe, na tab
+-- "Conta" ou por link de recuperação). Sem isto, essas ações eram
+-- bloqueadas pela restrição da coluna e nunca ficavam guardadas no
+-- Histórico (a app continuava a funcionar na mesma, só o registo no
+-- Histórico falhava silenciosamente).
+-- -------------------------------------------------------------
+alter table public.audit_log drop constraint if exists audit_log_action_check;
+alter table public.audit_log add constraint audit_log_action_check
+  check (action in ('editar', 'apagar', 'aprovar', 'rejeitar', 'seguranca'));
+
+alter table public.audit_log drop constraint if exists audit_log_entity_type_check;
+alter table public.audit_log add constraint audit_log_entity_type_check
+  check (entity_type in ('presenca', 'falta', 'conta'));
+
+-- -------------------------------------------------------------
+-- 9) Fotos de presença: tornar o bucket privado
+-- -------------------------------------------------------------
+-- Até aqui, as fotos ficavam num bucket público — quem tivesse o link
+-- direto via uma foto (mesmo sem login) conseguia vê-la. A partir de
+-- agora o bucket passa a privado, e só a Gestão (contas autenticadas)
+-- consegue gerar um link temporário para ver cada foto (a app já foi
+-- atualizada para pedir esse link em vez do link público antigo).
+update storage.buckets set public = false where id = 'presencas-fotos';
+
+drop policy if exists "presencas_fotos_select_public" on storage.objects;
+create policy "presencas_fotos_select_auth" on storage.objects
+  for select to authenticated using (bucket_id = 'presencas-fotos');

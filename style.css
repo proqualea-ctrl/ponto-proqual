@@ -208,6 +208,7 @@ body {
   cursor: pointer;
   padding: 6px 2px;
 }
+.link-action--center { width: 100%; text-align: center; margin-top: 4px; }
 
 /* ---------- Inputs / buttons ---------- */
 .text-input {

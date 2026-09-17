@@ -117,6 +117,44 @@ projeto que já está a funcionar. Não é preciso recomeçar do zero.
     a sessão já iniciada), a nova, e a confirmação — útil, por exemplo,
     se suspeitares que alguém possa ter visto a tua password. A troca
     fica registada na tab **Histórico**.
+19. **"Esqueci a palavra-passe"** — no ecrã de login da Gestão, novo
+    link que envia um email com um link de recuperação (usa o sistema
+    de emails do próprio Supabase). Ao abrir o link, a app mostra
+    diretamente o ecrã para escolher uma nova palavra-passe — sem
+    precisar de contactar ninguém nem de ir ao Supabase. **Importante:**
+    para os emails de recuperação chegarem, é preciso configurar o Site
+    URL / Redirect URLs no Supabase — ver secção 1.
+20. **Fotos de presença privadas** — as fotos deixaram de ficar num
+    bucket público (onde quem tivesse o link direto via a foto mesmo
+    sem login). Agora só a Gestão, já autenticada, consegue gerar um
+    link temporário (válido por 1 hora) para ver cada foto. Não muda
+    nada na forma de usar a app — só a forma como as fotos ficam
+    guardadas.
+21. **Tab "Agora"** — novo separador na Gestão (o primeiro da lista) que
+    mostra, em tempo real, quem tem uma Entrada marcada hoje e ainda não
+    marcou a Saída correspondente, agrupado por obra/escritório, com a
+    hora desde quando está lá. Tem um botão "🔄 Atualizar" para
+    refrescar a qualquer momento.
+22. **Editar e remover obras/escritórios** — na tab "Obras/Escritório", cada
+    local tem agora, além de "Ativar/Desativar", dois botões novos (só
+    administradores):
+    - **✏️ Editar** — permite corrigir o nome, o tipo, e sobretudo as
+      **coordenadas GPS e o raio** de um local já criado, sem precisar de ir
+      ao Supabase. É a forma de resolver o problema de um funcionário
+      aparecer sempre "fora de área" mesmo estando mesmo na obra: normalmente
+      é porque as coordenadas gravadas não correspondem exatamente ao local
+      real (ex: foram apontadas a partir de outro ponto, ou o local mudou
+      ligeiramente). Basta abrir "Editar", ir fisicamente à obra e tocar em
+      "📍 Usar localização atual" (ou colar coordenadas mais precisas do
+      Google Maps), ajustar o raio se necessário, e guardar.
+    - **🗑️ Remover** — apaga definitivamente uma obra/escritório. Só é
+      possível remover locais que **nunca tiveram nenhuma marcação de
+      presença associada** (ex: uma obra criada por engano ou só para
+      testar) — isto é uma proteção da base de dados para nunca se perder
+      histórico por engano. Para uma obra que já teve registos e agora
+      terminou, usa antes **"Desativar"**: deixa de aparecer como opção para
+      os funcionários, mas mantém todo o histórico de presenças e continua
+      a poder ser consultada nos Registos, no Resumo e no Ponto Individual.
 
 ---
 
@@ -134,12 +172,34 @@ Isto acrescenta: colunas de geofencing em `locations` e `attendance_records`,
 a tabela `admin_profiles` (níveis de acesso), a tabela `absence_requests`
 (justificação de faltas), a tabela `audit_log` (histórico de alterações),
 a coluna `tasks` em `attendance_records` (descrição das tarefas na Saída),
-e atualiza as permissões para só o `admin` poder editar/apagar. Podes
-correr este ficheiro mais do que uma vez sem problema (não duplica nada).
+alarga o `audit_log` para aceitar o registo de trocas de palavra-passe, e
+torna o bucket de fotos privado (só a Gestão autenticada vê as fotos, por
+link temporário). Também atualiza as permissões para só o `admin` poder
+editar/apagar. Podes correr este ficheiro mais do que uma vez sem problema
+(não duplica nada).
 
 > Se um dia precisares de criar o projeto Supabase **de raiz** (ex: para uma
 > filial nova), usa antes o [`schema.sql`](./schema.sql) completo — já inclui
 > tudo o que o `migration_v2.sql` acrescenta.
+
+### Ativar o "Esqueci a palavra-passe" (envio de emails)
+
+Para os links de recuperação de palavra-passe chegarem ao email de quem
+os pedir, o Supabase precisa de saber que o site da app tem permissão
+para receber esse link de volta:
+
+1. Entra em **Authentication → URL Configuration**
+2. Em **Site URL**, coloca `https://proqualea-ctrl.github.io/ponto-proqual/`
+3. Em **Redirect URLs**, acrescenta a mesma morada
+4. Grava
+
+Sem este passo, o botão "Esqueci a palavra-passe" continua a mostrar a
+mensagem de sucesso (por segurança, nunca diz se o email existe ou não),
+mas o link dentro do email não vai funcionar corretamente. O Supabase já
+vem com um serviço de emails limitado incluído (suficiente para uma
+equipa pequena) — se um dia enviares muitos pedidos de recuperação por
+dia, o Supabase pode pedir para configurares um servidor de email próprio
+em **Authentication → Emails → SMTP Settings**.
 
 ### Definir quem é "admin"
 
@@ -341,7 +401,29 @@ subpastas). Para atualizar:
      testa com a palavra-passe atual errada (deve recusar), com a
      confirmação diferente da nova (deve recusar), e por fim com tudo
      certo (deve confirmar sucesso); depois sai e volta a entrar já com
-     a nova palavra-passe para confirmares que ficou mesmo trocada.
+     a nova palavra-passe para confirmares que ficou mesmo trocada;
+   - a tab **Agora** mostra quem tem uma Entrada aberta hoje, agrupado
+     por local — marca uma Entrada num telemóvel de teste e confirma
+     que aparece aí (usa o botão "🔄 Atualizar" se não aparecer
+     sozinho), depois marca a Saída correspondente e confirma que
+     desaparece;
+   - as fotos de presença continuam a aparecer normalmente nos Registos
+     e nas Faltas — se não aparecerem depois de correres a migração,
+     confirma que fizeste o passo 3 da secção 1 (torna o bucket
+     privado) e que o `migration_v2.sql` correu sem erros.
+6. No ecrã de login da Gestão, testa **"Esqueci a palavra-passe"**:
+   pede o link com o teu email, confirma que chega ao email (ver secção
+   1 sobre o Site URL), abre-o e escolhe uma nova palavra-passe — deve
+   entrar diretamente na Gestão já com a sessão iniciada.
+7. (se fores admin) na tab **Obras/Escritório**, testa **Editar**/**Remover**:
+   - toca em **✏️ Editar** numa obra, muda o raio ou as coordenadas (ou usa
+     "📍 Usar localização atual" estando no próprio local) e guarda — volta a
+     abrir "Editar" e confirma que ficou gravado;
+   - cria uma obra só para teste (nome qualquer) e tenta **🗑️ Remover** —
+     deve desaparecer da lista;
+   - tenta **🗑️ Remover** uma obra que já tem registos de presença — deve
+     recusar com uma mensagem a sugerir "Desativar" em vez de apagar, e a
+     obra deve continuar na lista.
 
 ---
 
@@ -387,9 +469,10 @@ migration_v2.sql     # migração aditiva para o projeto já existente
   área de **Gestão** exige email+password.
 - Editar e apagar registos, e gerir funcionários/locais, está agora
   restrito a contas com papel `admin` em `admin_profiles` (ver secção 1).
-- As fotos continuam num bucket público por defeito (só quem tem o link
-  direto da foto a vê). Se quiseres torná-las privadas, é só ajustar o
-  `schema.sql`/`migration_v2.sql` — diz-me e faço essa alteração.
+- **Atualizado nesta versão**: as fotos deixaram de estar num bucket
+  público — agora só a Gestão autenticada consegue vê-las, por link
+  temporário (ver item 20 acima). Precisas de correr o `migration_v2.sql`
+  para esta alteração fazer efeito num projeto já existente.
 - Correção nesta versão: alguns botões marcados como "só para
   administradores" (ex: 💾 Cópia de segurança completa, adicionar
   funcionário/local) ficavam tecnicamente escondidos para uma conta
@@ -403,3 +486,8 @@ migration_v2.sql     # migração aditiva para o projeto já existente
   ponto e da exportação em Excel/PDF. Agora todas as tarefas de todas as
   saídas do dia aparecem sempre, mesmo quando há mais entradas/saídas do
   que o normal nesse dia.
+- Correção nesta versão: a funcionalidade de trocar a palavra-passe (tab
+  **Conta**) tinha sido implementada sem atualizar a restrição da tabela
+  `audit_log`, pelo que essas trocas nunca ficavam de facto registadas
+  no Histórico (a troca em si funcionava sempre; só o registo falhava,
+  silenciosamente). O `migration_v2.sql` já corrige isto.

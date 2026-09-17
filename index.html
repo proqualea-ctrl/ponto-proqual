@@ -211,6 +211,36 @@
       <input class="text-input" id="admin-password" type="password" placeholder="Palavra-passe" autocomplete="current-password" />
       <p class="error-text" id="admin-login-error" hidden></p>
       <button class="btn btn--accent btn--wide" id="admin-login-btn">Entrar</button>
+      <button class="link-action link-action--center" data-nav="admin-forgot">Esqueci a palavra-passe</button>
+    </div>
+  </section>
+
+  <!-- ===================== ADMIN: ESQUECI A PALAVRA-PASSE ===================== -->
+  <section class="screen" data-screen="admin-forgot">
+    <header class="screen-header">
+      <button class="back-btn" data-back="admin-login">←</button>
+      <h2>RECUPERAR ACESSO</h2>
+    </header>
+    <div class="admin-login-box">
+      <p class="muted" style="margin-bottom:16px;">Indica o teu email de acesso à Gestão. Se existir uma conta com esse email, vais receber um link para escolheres uma nova palavra-passe.</p>
+      <input class="text-input" id="forgot-email" type="email" placeholder="Email" autocomplete="username" />
+      <p class="error-text" id="forgot-error" hidden></p>
+      <p class="success-text" id="forgot-success" hidden></p>
+      <button class="btn btn--accent btn--wide" id="forgot-send-btn">Enviar link de recuperação</button>
+    </div>
+  </section>
+
+  <!-- ===================== ADMIN: DEFINIR NOVA PALAVRA-PASSE (a partir do link recebido por email) ===================== -->
+  <section class="screen" data-screen="admin-reset-password">
+    <header class="screen-header">
+      <h2>NOVA PALAVRA-PASSE</h2>
+    </header>
+    <div class="admin-login-box">
+      <p class="muted" style="margin-bottom:16px;">Escolhe uma nova palavra-passe para a tua conta de Gestão.</p>
+      <input class="text-input" id="reset-new-password" type="password" placeholder="Nova palavra-passe (mín. 8 caracteres)" autocomplete="new-password" />
+      <input class="text-input" id="reset-confirm-password" type="password" placeholder="Confirmar nova palavra-passe" autocomplete="new-password" />
+      <p class="error-text" id="reset-error" hidden></p>
+      <button class="btn btn--accent btn--wide" id="reset-submit-btn">Guardar nova palavra-passe</button>
     </div>
   </section>
 
@@ -224,6 +254,7 @@
     </header>
 
     <div class="tabs">
+      <button class="tab-btn" data-tab="agora">Agora</button>
       <button class="tab-btn is-active" data-tab="records">Registos</button>
       <button class="tab-btn" data-tab="resumo">Resumo</button>
       <button class="tab-btn" data-tab="individual">Ponto Individual</button>
@@ -232,6 +263,17 @@
       <button class="tab-btn" data-tab="employees">Funcionários</button>
       <button class="tab-btn" data-tab="locations">Obras/Escritório</button>
       <button class="tab-btn" data-tab="conta">Conta</button>
+    </div>
+
+    <!-- Tab: Agora (quem está a trabalhar neste momento) -->
+    <div class="tab-panel" data-tab-panel="agora">
+      <div class="filters">
+        <p class="muted" id="now-working-count" style="font-size:14px; font-weight:600;">—</p>
+        <button class="btn btn--ghost" id="now-working-refresh-btn" type="button" style="margin-left:auto;">🔄 Atualizar</button>
+      </div>
+      <div class="list" id="now-working-list">
+        <p class="list-empty">A carregar…</p>
+      </div>
     </div>
 
     <!-- Tab: Records -->
@@ -341,6 +383,41 @@
 
   <p class="app-footer" id="app-footer"></p>
 
+</div>
+
+<div class="modal-backdrop" id="edit-location-modal" hidden>
+  <div class="modal-box">
+    <h3>Editar obra/escritório</h3>
+    <label for="edit-location-name">Nome</label>
+    <input class="text-input" id="edit-location-name" placeholder="Nome da obra ou escritório" />
+    <label for="edit-location-type">Tipo</label>
+    <select class="text-input" id="edit-location-type">
+      <option value="obra">Obra</option>
+      <option value="escritorio">Escritório</option>
+      <option value="externo">Serviço Externo (sem morada fixa)</option>
+    </select>
+
+    <p class="muted" style="font-size:12px; margin:10px 0 0;">
+      💡 Se as marcações de presença aqui costumam vir "fora de área" mesmo
+      quando a pessoa está mesmo no local, ajusta as coordenadas (usa o
+      botão abaixo estando no próprio local, ou cola as coordenadas do
+      Google Maps) ou aumenta o raio.
+    </p>
+
+    <button class="btn btn--ghost" id="edit-location-geo-btn" type="button" style="margin-top:10px;">📍 Usar localização atual</button>
+    <span class="geo-status" id="edit-location-geo-status"></span>
+
+    <div class="geo-manual-row">
+      <input class="text-input text-input--sm" id="edit-location-lat" placeholder="Latitude (ex: 38.7169)" inputmode="decimal" />
+      <input class="text-input text-input--sm" id="edit-location-lng" placeholder="Longitude (ex: -9.1399)" inputmode="decimal" />
+      <input class="text-input text-input--sm" id="edit-location-radius" placeholder="Raio (m)" inputmode="numeric" />
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn--ghost" id="edit-location-cancel">Cancelar</button>
+      <button class="btn btn--accent" id="edit-location-save">Guardar</button>
+    </div>
+  </div>
 </div>
 
 <div class="modal-backdrop" id="edit-record-modal" hidden>

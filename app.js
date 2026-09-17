@@ -27,6 +27,7 @@
     dashboard: { records: [], employees: [], locations: [], absences: [], auditLog: [] },
     installPromptEvent: null,
     editingRecordId: null,
+    editingLocationId: null,
     flowMode: "presence", // 'presence' | 'absence' — decide o que acontece depois de escolher o funcionário
   };
 
@@ -62,6 +63,12 @@
     if (name === "confirm-presence") enterConfirmScreen();
     if (name === "absence-new") enterAbsenceScreen();
     if (name === "admin-dashboard") loadDashboard();
+    if (name === "admin-forgot") {
+      const errEl = document.getElementById("forgot-error");
+      const okEl = document.getElementById("forgot-success");
+      if (errEl) errEl.hidden = true;
+      if (okEl) okEl.hidden = true;
+    }
   }
 
   document.addEventListener("click", (e) => {
@@ -706,6 +713,105 @@
     showScreen("admin-dashboard");
   });
 
+  // -----------------------------------------------------------
+  // Gestão: "Esqueci a palavra-passe" (recuperação por email)
+  // -----------------------------------------------------------
+  document.getElementById("forgot-send-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("forgot-send-btn");
+    const email = document.getElementById("forgot-email").value.trim();
+    const errEl = document.getElementById("forgot-error");
+    const okEl = document.getElementById("forgot-success");
+    errEl.hidden = true;
+    okEl.hidden = true;
+
+    if (!email) { errEl.textContent = "Indica o teu email."; errEl.hidden = false; return; }
+
+    btn.disabled = true;
+    btn.textContent = "A enviar…";
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + window.location.pathname,
+      });
+      // Por segurança, mostramos sempre a mesma mensagem de sucesso,
+      // exista ou não uma conta com esse email — assim ninguém consegue
+      // usar este formulário para descobrir que emails têm conta na Gestão.
+      if (error && error.status && error.status >= 500) {
+        errEl.textContent = "Não foi possível enviar o pedido agora. Tenta novamente.";
+        errEl.hidden = false;
+      } else {
+        document.getElementById("forgot-email").value = "";
+        okEl.textContent = "Se existir uma conta com esse email, foi enviado um link de recuperação. Verifica a caixa de entrada (e o spam).";
+        okEl.hidden = false;
+      }
+    } catch (err) {
+      console.error(err);
+      errEl.textContent = "Não foi possível enviar o pedido agora. Tenta novamente.";
+      errEl.hidden = false;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Enviar link de recuperação";
+    }
+  });
+
+  // Quando a pessoa abre o link de recuperação recebido por email, o
+  // Supabase dispara este evento assim que a página carrega — mostramos
+  // o ecrã para escolher a nova palavra-passe.
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === "PASSWORD_RECOVERY") {
+      state.session = session;
+      showScreen("admin-reset-password");
+    }
+  });
+
+  document.getElementById("reset-submit-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("reset-submit-btn");
+    const errEl = document.getElementById("reset-error");
+    errEl.hidden = true;
+
+    const newPassword = document.getElementById("reset-new-password").value;
+    const confirmPassword = document.getElementById("reset-confirm-password").value;
+
+    if (!newPassword || !confirmPassword) {
+      errEl.textContent = "Preenche os dois campos.";
+      errEl.hidden = false;
+      return;
+    }
+    if (newPassword.length < 8) {
+      errEl.textContent = "A nova palavra-passe deve ter pelo menos 8 caracteres.";
+      errEl.hidden = false;
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      errEl.textContent = "A confirmação não coincide com a nova palavra-passe.";
+      errEl.hidden = false;
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "A guardar…";
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        errEl.textContent = "Não foi possível guardar a nova palavra-passe. Pede um novo link de recuperação.";
+        errEl.hidden = false;
+        return;
+      }
+      document.getElementById("reset-new-password").value = "";
+      document.getElementById("reset-confirm-password").value = "";
+      toast("Palavra-passe definida com sucesso");
+      logAudit("seguranca", "conta", state.session?.user?.id, state.session?.user?.email || null);
+      await fetchRole();
+      showScreen("admin-dashboard");
+    } catch (err) {
+      console.error(err);
+      errEl.textContent = "Erro inesperado. Tenta novamente.";
+      errEl.hidden = false;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Guardar nova palavra-passe";
+    }
+  });
+
   document.getElementById("admin-logout-btn").addEventListener("click", async () => {
     await supabase.auth.signOut();
     state.session = null;
@@ -897,10 +1003,23 @@
   // -----------------------------------------------------------
   // Gestão: dashboard de registos
   // -----------------------------------------------------------
-  function publicPhotoUrl(path) {
-    if (!path) return "";
-    const { data } = supabase.storage.from(cfg.STORAGE_BUCKET).getPublicUrl(path);
-    return data?.publicUrl || "";
+  // O bucket de fotos é privado — para mostrar uma foto na Gestão é
+  // preciso pedir um link temporário (signed URL), válido por 1 hora,
+  // em vez do link público antigo. signedPhotoUrlMap() faz isso para
+  // uma lista inteira de registos de uma só vez, antes de desenhar a
+  // lista (para não haver um pedido de rede por cada `<img>`).
+  async function signedPhotoUrlMap(paths) {
+    const unique = [...new Set(paths.filter(Boolean))];
+    const map = new Map();
+    await Promise.all(unique.map(async (path) => {
+      try {
+        const { data, error } = await supabase.storage.from(cfg.STORAGE_BUCKET).createSignedUrl(path, 3600);
+        if (!error && data?.signedUrl) map.set(path, data.signedUrl);
+      } catch (err) {
+        console.error("signed url:", err);
+      }
+    }));
+    return map;
   }
 
   async function loadDashboard() {
@@ -921,7 +1040,99 @@
     await loadAbsenceRequests();
     await loadAuditLog();
     await loadMonthlySummary();
+    await loadNowWorking();
   }
+
+  // -----------------------------------------------------------
+  // Gestão: "Agora" — quem tem uma Entrada marcada hoje e ainda não
+  // marcou a Saída correspondente (o último registo do dia, por
+  // funcionário, é uma Entrada).
+  // -----------------------------------------------------------
+  async function loadNowWorking() {
+    const box = document.getElementById("now-working-list");
+    if (!box) return;
+    box.innerHTML = '<p class="list-empty">A carregar…</p>';
+
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    const { data, error } = await supabase
+      .from("attendance_records")
+      .select("employee_id, direction, created_at, employees(name), locations(name)")
+      .gte("created_at", start.toISOString())
+      .lte("created_at", end.toISOString())
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error(error);
+      box.innerHTML = '<p class="list-empty">Erro ao carregar.</p>';
+      return;
+    }
+
+    // O registo mais recente do dia, por funcionário — como a consulta
+    // já vem ordenada do mais antigo para o mais recente, o último
+    // "set" de cada funcionário no Map fica sempre com o mais recente.
+    const lastByEmployee = new Map();
+    (data || []).forEach((rec) => { lastByEmployee.set(rec.employee_id, rec); });
+
+    const working = [...lastByEmployee.values()].filter((rec) => rec.direction === "entrada");
+    renderNowWorkingList(working);
+  }
+
+  function renderNowWorkingList(working) {
+    const box = document.getElementById("now-working-list");
+    const countEl = document.getElementById("now-working-count");
+    if (!box) return;
+
+    if (countEl) {
+      countEl.textContent = working.length
+        ? `🟢 ${working.length} em serviço agora`
+        : "Ninguém em serviço neste momento";
+    }
+
+    if (!working.length) {
+      box.innerHTML = '<p class="list-empty">Ninguém tem uma Entrada em aberto hoje.</p>';
+      return;
+    }
+
+    const byLocation = new Map();
+    working.forEach((rec) => {
+      const locName = rec.locations?.name || "Local desconhecido";
+      if (!byLocation.has(locName)) byLocation.set(locName, []);
+      byLocation.get(locName).push(rec);
+    });
+
+    box.innerHTML = "";
+    [...byLocation.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0], "pt-PT"))
+      .forEach(([locName, recs]) => {
+        const head = document.createElement("p");
+        head.className = "muted";
+        head.style.cssText = "font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:0.4px; margin:14px 0 6px;";
+        head.textContent = `📍 ${locName} · ${recs.length}`;
+        box.appendChild(head);
+
+        recs
+          .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+          .forEach((rec) => {
+            const since = new Date(rec.created_at).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
+            const row = document.createElement("div");
+            row.className = "list-item";
+            row.style.cursor = "default";
+            row.innerHTML = `
+              <span class="li-main">
+                <span class="avatar">${initials(rec.employees?.name || "—")}</span>
+                <span class="li-name">${escapeHtml(rec.employees?.name || "—")}</span>
+              </span>
+              <span class="li-tag">🟢 desde ${since}</span>
+            `;
+            box.appendChild(row);
+          });
+      });
+  }
+
+  document.getElementById("now-working-refresh-btn").addEventListener("click", loadNowWorking);
 
   function fillSelect(id, items, placeholder) {
     const sel = document.getElementById(id);
@@ -959,9 +1170,11 @@
     renderRecordsList(state.dashboard.records);
   }
 
-  function renderRecordsList(data) {
+  async function renderRecordsList(data) {
     const box = document.getElementById("records-list");
     if (!data.length) { box.innerHTML = '<p class="list-empty">Sem registos para este filtro.</p>'; return; }
+
+    const photoUrls = await signedPhotoUrlMap(data.map((rec) => rec.photo_path));
 
     box.innerHTML = "";
     data.forEach((rec) => {
@@ -991,7 +1204,7 @@
         ? `<div class="r-line audit-line">✏️ Editado por ${escapeHtml(rec.updated_by)} em ${new Date(rec.updated_at).toLocaleString("pt-PT")}</div>`
         : "";
       const photo = rec.photo_path
-        ? `<img class="record-thumb" src="${publicPhotoUrl(rec.photo_path)}" alt="" />`
+        ? `<img class="record-thumb" src="${escapeHtml(photoUrls.get(rec.photo_path) || "")}" alt="" />`
         : `<div class="record-thumb"></div>`;
       const div = document.createElement("div");
       div.className = "record-card";
@@ -1140,7 +1353,7 @@
     renderAbsenceList(state.dashboard.absences);
   }
 
-  function renderAbsenceList(data) {
+  async function renderAbsenceList(data) {
     const box = document.getElementById("absence-list");
     if (!box) return;
 
@@ -1158,6 +1371,8 @@
       rejeitado: `<span class="review-badge review-badge--rejeitado">❌ Rejeitado</span>`,
     };
 
+    const photoUrls = await signedPhotoUrlMap(data.map((req) => req.photo_path));
+
     box.innerHTML = "";
     data.forEach((req) => {
       const when = new Date(req.absence_date + "T00:00:00").toLocaleDateString("pt-PT");
@@ -1165,8 +1380,9 @@
       const reviewedByTag = (req.status !== "pendente" && req.reviewed_by)
         ? `<div class="r-line audit-line">${req.status === "aprovado" ? "Aprovado" : "Rejeitado"} por ${escapeHtml(req.reviewed_by)} em ${new Date(req.reviewed_at).toLocaleString("pt-PT")}</div>`
         : "";
+      const photoUrl = escapeHtml(photoUrls.get(req.photo_path) || "");
       const photo = req.photo_path
-        ? `<a href="${publicPhotoUrl(req.photo_path)}" target="_blank" rel="noopener"><img class="record-thumb" src="${publicPhotoUrl(req.photo_path)}" alt="" /></a>`
+        ? `<a href="${photoUrl}" target="_blank" rel="noopener"><img class="record-thumb" src="${photoUrl}" alt="" /></a>`
         : `<div class="record-thumb"></div>`;
       const div = document.createElement("div");
       div.className = "record-card";
@@ -1307,7 +1523,13 @@
       const row = document.createElement("div");
       row.className = "list-item";
       const tag = isAdmin()
-        ? `<span class="li-tag" data-role="toggle" style="cursor:pointer;">${locationLabel(loc.type)} · ${loc.active ? "Desativar" : "Ativar"}</span>`
+        ? `
+          <span style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; flex-shrink:0;">
+            <span class="li-tag" data-role="edit" style="cursor:pointer;">✏️ Editar</span>
+            <span class="li-tag" data-role="toggle" style="cursor:pointer;">${loc.active ? "Desativar" : "Ativar"}</span>
+            <span class="li-tag" data-role="delete" style="cursor:pointer;">🗑️ Remover</span>
+          </span>
+        `
         : `<span class="li-tag">${locationLabel(loc.type)}</span>`;
       row.innerHTML = `
         <span class="li-main">
@@ -1316,6 +1538,13 @@
         </span>
         ${tag}
       `;
+      const editEl = row.querySelector('[data-role="edit"]');
+      if (editEl) {
+        editEl.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          openEditLocationModal(loc.id);
+        });
+      }
       const toggleEl = row.querySelector('[data-role="toggle"]');
       if (toggleEl) {
         toggleEl.addEventListener("click", async (ev) => {
@@ -1324,8 +1553,103 @@
           loadDashboard();
         });
       }
+      const deleteEl = row.querySelector('[data-role="delete"]');
+      if (deleteEl) {
+        deleteEl.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          deleteLocation(loc.id);
+        });
+      }
       box.appendChild(row);
     });
+  }
+
+  // -----------------------------------------------------------
+  // Gestão: editar / remover uma obra ou escritório (apenas admin)
+  // -----------------------------------------------------------
+  function openEditLocationModal(locationId) {
+    const loc = state.dashboard.locations.find((l) => l.id === locationId);
+    if (!loc) return;
+    state.editingLocationId = locationId;
+
+    document.getElementById("edit-location-name").value = loc.name || "";
+    document.getElementById("edit-location-type").value = loc.type;
+    document.getElementById("edit-location-lat").value = loc.latitude != null ? loc.latitude : "";
+    document.getElementById("edit-location-lng").value = loc.longitude != null ? loc.longitude : "";
+    document.getElementById("edit-location-radius").value = loc.radius_m != null ? loc.radius_m : "100";
+    document.getElementById("edit-location-geo-status").textContent = "";
+
+    document.getElementById("edit-location-modal").hidden = false;
+  }
+
+  document.getElementById("edit-location-geo-btn").addEventListener("click", () => {
+    captureGeoInto("edit-location-geo-status", (lat, lng) => {
+      document.getElementById("edit-location-lat").value = lat.toFixed(6);
+      document.getElementById("edit-location-lng").value = lng.toFixed(6);
+    });
+  });
+
+  document.getElementById("edit-location-cancel").addEventListener("click", () => {
+    document.getElementById("edit-location-modal").hidden = true;
+    state.editingLocationId = null;
+  });
+
+  document.getElementById("edit-location-save").addEventListener("click", async () => {
+    if (!state.editingLocationId) return;
+    const nameInput = document.getElementById("edit-location-name");
+    const typeInput = document.getElementById("edit-location-type");
+    const latInput = document.getElementById("edit-location-lat");
+    const lngInput = document.getElementById("edit-location-lng");
+    const radiusInput = document.getElementById("edit-location-radius");
+
+    const name = nameInput.value.trim();
+    if (!name) { toast("Indica o nome da obra/escritório", true); return; }
+
+    const payload = { name, type: typeInput.value };
+    const lat = parseFloat(String(latInput.value).replace(",", "."));
+    const lng = parseFloat(String(lngInput.value).replace(",", "."));
+    if (!isNaN(lat) && !isNaN(lng)) {
+      payload.latitude = lat;
+      payload.longitude = lng;
+      const radius = parseInt(radiusInput.value, 10);
+      payload.radius_m = !isNaN(radius) && radius > 0 ? radius : 100;
+    } else if (latInput.value.toString().trim() || lngInput.value.toString().trim()) {
+      toast("Latitude/Longitude inválidas — deixa ambas em branco ou preenche as duas", true);
+      return;
+    } else {
+      payload.latitude = null;
+      payload.longitude = null;
+      payload.radius_m = 100;
+    }
+
+    const { error } = await supabase.from("locations").update(payload).eq("id", state.editingLocationId);
+    if (error) { console.error(error); toast("Não foi possível guardar a alteração", true); return; }
+
+    document.getElementById("edit-location-modal").hidden = true;
+    state.editingLocationId = null;
+    toast("Obra/escritório atualizado");
+    loadDashboard();
+  });
+
+  async function deleteLocation(locationId) {
+    const loc = state.dashboard.locations.find((l) => l.id === locationId);
+    if (!loc) return;
+    if (!window.confirm(`Remover "${loc.name}"? Só é possível remover locais que nunca tiveram nenhuma marcação de presença associada.`)) return;
+
+    const { error } = await supabase.from("locations").delete().eq("id", locationId);
+    if (error) {
+      console.error(error);
+      // Restrição da base de dados: não deixa apagar um local que já tem
+      // registos de presença associados (para nunca perder histórico).
+      if (error.code === "23503") {
+        toast('Este local já tem marcações de presença associadas — não pode ser removido. Usa "Desativar" para o deixar de mostrar como opção, sem perder o histórico.', true);
+      } else {
+        toast("Não foi possível remover o local", true);
+      }
+      return;
+    }
+    toast("Local removido");
+    loadDashboard();
   }
 
   document.getElementById("admin-add-employee-btn").addEventListener("click", async () => {

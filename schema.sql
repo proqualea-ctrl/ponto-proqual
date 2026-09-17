@@ -130,8 +130,8 @@ create table if not exists public.audit_log (
   id uuid primary key default gen_random_uuid(),
   actor_email text,
   actor_name text,
-  action text not null check (action in ('editar', 'apagar', 'aprovar', 'rejeitar')),
-  entity_type text not null check (entity_type in ('presenca', 'falta')),
+  action text not null check (action in ('editar', 'apagar', 'aprovar', 'rejeitar', 'seguranca')),
+  entity_type text not null check (entity_type in ('presenca', 'falta', 'conta')),
   entity_id uuid,
   entity_label text,          -- descrição legível (ex: nome do funcionário + data), guardada
                                -- porque o registo original pode já ter sido apagado
@@ -232,16 +232,20 @@ create policy "audit_select_auth" on public.audit_log
 -- -------------------------------------------------------------
 -- Storage: bucket para as fotos de presença
 -- -------------------------------------------------------------
+-- Bucket privado: os funcionários continuam a conseguir enviar fotos
+-- (insert, sem login), mas só a Gestão (contas autenticadas) consegue
+-- vê-las — a app gera um link temporário (signed URL) para cada foto,
+-- em vez de usar um link público permanente.
 insert into storage.buckets (id, name, public)
-values ('presencas-fotos', 'presencas-fotos', true)
+values ('presencas-fotos', 'presencas-fotos', false)
 on conflict (id) do nothing;
 
 create policy "presencas_fotos_insert_public" on storage.objects
   for insert to anon, authenticated
   with check (bucket_id = 'presencas-fotos');
 
-create policy "presencas_fotos_select_public" on storage.objects
-  for select using (bucket_id = 'presencas-fotos');
+create policy "presencas_fotos_select_auth" on storage.objects
+  for select to authenticated using (bucket_id = 'presencas-fotos');
 
 create policy "presencas_fotos_delete_auth" on storage.objects
   for delete to authenticated using (bucket_id = 'presencas-fotos');
