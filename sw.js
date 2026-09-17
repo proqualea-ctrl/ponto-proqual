@@ -9,7 +9,7 @@
 // service worker mudou, continua a usar a cache antiga, e quem já tem a
 // app aberta/instalada não vê as novidades (mesmo depois de o site já
 // estar atualizado no GitHub) até fechar e reabrir várias vezes.
-const CACHE_NAME = "ponto-proqual-shell-v8";
+const CACHE_NAME = "ponto-proqual-shell-v9";
 const SHELL_FILES = [
   "./",
   "./index.html",
