@@ -190,7 +190,7 @@
     box.innerHTML = "";
     loadEmployees().then(() => {
       if (!state.employees.length) {
-        box.innerHTML = '<p class="list-empty">Ainda não há funcionários. Cria o primeiro abaixo.</p>';
+        box.innerHTML = '<p class="list-empty">Ainda não há funcionários. Fala com a Gestão para seres adicionado.</p>';
         return;
       }
       state.employees.forEach((emp) => {
@@ -212,21 +212,12 @@
     });
   }
 
-  document.getElementById("new-employee-continue").addEventListener("click", async () => {
-    const nameInput = document.getElementById("new-employee-name");
-    const deptInput = document.getElementById("new-employee-dept");
-    const name = nameInput.value.trim();
-    if (!name) { toast("Escreve o teu nome", true); return; }
-    const { data, error } = await supabase
-      .from("employees")
-      .insert({ name, department: deptInput.value })
-      .select()
-      .single();
-    if (error) { console.error(error); toast("Não foi possível criar o funcionário", true); return; }
-    nameInput.value = "";
-    state.selectedEmployee = data;
-    showScreen(state.flowMode === "absence" ? "absence-new" : "location-select");
-  });
+  // Nota: criar funcionários novos deixou de estar disponível no ecrã do
+  // funcionário ("+ Novo funcionário" foi removido) — só a Gestão pode
+  // adicionar funcionários (tab "Funcionários"). Isto está também
+  // reforçado pela regra de segurança da base de dados (RLS): só
+  // utilizadores autenticados da Gestão conseguem inserir na tabela
+  // "employees" (ver migration_v2.sql, secção 10).
 
   // -----------------------------------------------------------
   // Locais (obras + escritório)
@@ -256,6 +247,28 @@
   function formatTasksSummary(tasks) {
     if (!Array.isArray(tasks) || !tasks.length) return "";
     return tasks.map((t) => `${t.description}${t.percent ? ` (${t.percent}%)` : ""}`).join(", ");
+  }
+
+  // Calcula os milissegundos trabalhados entre uma Entrada e uma Saída,
+  // excluindo a sobreposição com a hora de almoço (12h-13h) de cada dia
+  // abrangido — ninguém está a trabalhar nesse período, por isso não deve
+  // contar para as horas trabalhadas no Resumo mensal nem no Ponto
+  // Individual. Cobre também o caso (raro) de um turno atravessar mais do
+  // que um dia, subtraindo o almoço de cada dia envolvido.
+  function workedMsExcludingLunch(start, end) {
+    if (!(start instanceof Date) || !(end instanceof Date) || !(end > start)) return 0;
+    let totalMs = end - start;
+    const dayCursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const lastDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    while (dayCursor <= lastDay) {
+      const lunchStart = new Date(dayCursor.getFullYear(), dayCursor.getMonth(), dayCursor.getDate(), 12, 0, 0);
+      const lunchEnd = new Date(dayCursor.getFullYear(), dayCursor.getMonth(), dayCursor.getDate(), 13, 0, 0);
+      const overlapStart = start > lunchStart ? start : lunchStart;
+      const overlapEnd = end < lunchEnd ? end : lunchEnd;
+      if (overlapEnd > overlapStart) totalMs -= (overlapEnd - overlapStart);
+      dayCursor.setDate(dayCursor.getDate() + 1);
+    }
+    return Math.max(0, totalMs);
   }
 
   function renderLocationList() {
@@ -1898,7 +1911,7 @@
         if (rec.direction === "entrada") {
           openEntrada = new Date(rec.created_at);
         } else if (rec.direction === "saida" && openEntrada) {
-          totalMs += new Date(rec.created_at) - openEntrada;
+          totalMs += workedMsExcludingLunch(openEntrada, new Date(rec.created_at));
           openEntrada = null;
         }
       });
@@ -2022,7 +2035,7 @@
         } else if (r.direction === "saida") {
           if (!lastSaida || r.time > lastSaida) lastSaida = r.time;
           if (openEntrada) {
-            hours += (r.time - openEntrada) / 3600000;
+            hours += workedMsExcludingLunch(openEntrada, r.time) / 3600000;
             openEntrada = null;
           }
           if (Array.isArray(r.tasks) && r.tasks.length) tasksAll.push(...r.tasks);

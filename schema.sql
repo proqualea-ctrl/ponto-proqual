@@ -176,10 +176,10 @@ create policy "locations_delete_admin" on public.locations
 -- employees
 create policy "employees_select_public" on public.employees
   for select using (true);
-create policy "employees_insert_public" on public.employees
-  -- permite que o próprio funcionário se auto-registe no quiosque ("+ Novo funcionário"),
-  -- tal como no site original. Remove esta política se quiseres que só a Gestão adicione.
-  for insert to anon, authenticated with check (true);
+create policy "employees_insert_auth" on public.employees
+  -- só a Gestão (utilizadores autenticados) pode criar funcionários — o
+  -- quiosque só permite escolher entre os que já existem.
+  for insert to authenticated with check (true);
 create policy "employees_update_admin" on public.employees
   for update to authenticated using (
     exists (select 1 from public.admin_profiles where id = auth.uid() and role = 'admin')

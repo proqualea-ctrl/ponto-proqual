@@ -251,3 +251,17 @@ update storage.buckets set public = false where id = 'presencas-fotos';
 drop policy if exists "presencas_fotos_select_public" on storage.objects;
 create policy "presencas_fotos_select_auth" on storage.objects
   for select to authenticated using (bucket_id = 'presencas-fotos');
+
+-- -------------------------------------------------------------
+-- 10) Só a Gestão pode registar novos funcionários
+-- -------------------------------------------------------------
+-- Até aqui, qualquer pessoa no quiosque conseguia criar-se a si própria
+-- como funcionário ("+ Novo funcionário", sem sessão iniciada). Isso
+-- permitia nomes de teste/duplicados. A partir de agora só contas de
+-- Gestão autenticadas (admin ou encarregado) podem criar funcionários —
+-- a app já foi atualizada para deixar de mostrar essa opção no ecrã do
+-- funcionário; esta política é o que impede mesmo que alguém contorne a
+-- interface e insira diretamente na base de dados.
+drop policy if exists "employees_insert_public" on public.employees;
+create policy "employees_insert_auth" on public.employees
+  for insert to authenticated with check (true);

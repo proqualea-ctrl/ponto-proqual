@@ -155,6 +155,21 @@ projeto que já está a funcionar. Não é preciso recomeçar do zero.
       terminou, usa antes **"Desativar"**: deixa de aparecer como opção para
       os funcionários, mas mantém todo o histórico de presenças e continua
       a poder ser consultada nos Registos, no Resumo e no Ponto Individual.
+23. **Só a Gestão regista funcionários** — o botão "+ Novo funcionário" foi
+    removido do ecrã do funcionário; agora só é possível escolher um nome já
+    existente na lista. Para adicionar alguém novo, a Gestão faz isso na tab
+    "Funcionários" (como já acontecia com as obras/locais). Isto evita nomes
+    de teste, duplicados ou mal escritos criados sem querer no quiosque, e
+    está também reforçado na base de dados (só contas de Gestão autenticadas
+    podem inserir na tabela de funcionários — ver `migration_v2.sql`).
+24. **Hora de almoço (12h-13h) não conta como horas trabalhadas** — no
+    cálculo de horas do **Resumo mensal** e do **Ponto Individual**, o
+    período das 12h às 13h deixa de ser contado, mesmo que a Entrada seja
+    antes do meio-dia e a Saída depois da 13h (ex: Entrada 09:00 → Saída
+    17:00 passa a mostrar 7.0h em vez de 8.0h). A ideia é simples: ninguém
+    está a trabalhar durante o almoço, por isso não deve entrar na conta.
+    Isto não muda os horários de Entrada/Saída mostrados — só o total de
+    horas calculado a partir deles.
 
 ---
 
@@ -424,6 +439,15 @@ subpastas). Para atualizar:
    - tenta **🗑️ Remover** uma obra que já tem registos de presença — deve
      recusar com uma mensagem a sugerir "Desativar" em vez de apagar, e a
      obra deve continuar na lista.
+8. No ecrã inicial (fora da Gestão), confirma que **já não aparece** o
+   botão "+ Novo funcionário" — só a lista de funcionários já criados
+   pelo administrador, com uma nota a dizer para falar com a Gestão caso
+   não estejas na lista.
+9. Marca uma Entrada antes do meio-dia (ex: 09:00) e a Saída depois da
+   1 da tarde (ex: 17:00) para um funcionário de teste, e confirma que
+   nos separadores **Resumo** e **Ponto Individual** as horas mostradas
+   já não incluem a hora de almoço (no exemplo, deve aparecer 7.0h, não
+   8.0h).
 
 ---
 
@@ -491,3 +515,12 @@ migration_v2.sql     # migração aditiva para o projeto já existente
   `audit_log`, pelo que essas trocas nunca ficavam de facto registadas
   no Histórico (a troca em si funcionava sempre; só o registo falhava,
   silenciosamente). O `migration_v2.sql` já corrige isto.
+- **Atualizado nesta versão**: até agora, a política de segurança da tabela
+  de funcionários (`employees_insert_public`) permitia que qualquer pessoa,
+  mesmo sem login, criasse um novo funcionário diretamente no quiosque —
+  era assim que o botão "+ Novo funcionário" funcionava. Essa política foi
+  substituída por `employees_insert_auth`, que só permite a contas de
+  Gestão autenticadas. Precisas de correr o `migration_v2.sql` (secção 10)
+  para este bloqueio ficar realmente ativo num projeto já existente — sem
+  isso, mesmo com o botão removido da interface, alguém tecnicamente
+  conseguiria continuar a inserir funcionários diretamente pela API.
