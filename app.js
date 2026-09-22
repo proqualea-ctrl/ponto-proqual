@@ -22,6 +22,7 @@
     gps: { status: "loading", lat: null, lng: null, accuracy: null },
     geofence: { distance: null, within: null },
     duplicateWarning: null,
+    chegadaNote: null,
     session: null, // sessão de auth da Gestão
     role: null,    // 'admin' | 'encarregado' | null
     dashboard: { records: [], employees: [], locations: [], absences: [], auditLog: [] },
@@ -95,21 +96,34 @@
   // -----------------------------------------------------------
   async function checkDuplicateDirection() {
     state.duplicateWarning = null;
+    state.chegadaNote = null;
     if (!state.selectedEmployee) return;
     try {
       const { data, error } = await supabase
         .from("attendance_records")
-        .select("direction, created_at, locations(name)")
+        .select("direction, created_at, locations(name, type)")
         .eq("employee_id", state.selectedEmployee.id)
         .order("created_at", { ascending: false })
         .limit(1);
       if (error) { console.error(error); return; }
       const last = data && data[0];
       if (last && last.direction === state.direction) {
-        const when = new Date(last.created_at).toLocaleString("pt-PT");
-        state.duplicateWarning = state.direction === "entrada"
-          ? `Atenção: já existe uma ENTRADA registada em ${when} (${last.locations?.name || "—"}) sem SAÍDA correspondente.`
-          : `Atenção: já existe uma SAÍDA registada em ${when} (${last.locations?.name || "—"}) sem ENTRADA correspondente.`;
+        // Exceção: uma Entrada em Serviço Externo seguida de uma Entrada
+        // numa obra/escritório é a "chegada à obra" que pedimos para se
+        // marcar mesmo com a Entrada externa ainda aberta — não é um
+        // engano, é o fluxo certo, por isso não mostramos o aviso aqui.
+        const isChegadaAposExterno =
+          state.direction === "entrada" &&
+          last.locations?.type === "externo" &&
+          state.selectedLocation?.type !== "externo";
+        if (isChegadaAposExterno) {
+          state.chegadaNote = "Isto confirma a tua chegada aqui depois do Serviço Externo — obrigado por marcares!";
+        } else {
+          const when = new Date(last.created_at).toLocaleString("pt-PT");
+          state.duplicateWarning = state.direction === "entrada"
+            ? `Atenção: já existe uma ENTRADA registada em ${when} (${last.locations?.name || "—"}) sem SAÍDA correspondente.`
+            : `Atenção: já existe uma SAÍDA registada em ${when} (${last.locations?.name || "—"}) sem ENTRADA correspondente.`;
+        }
       }
     } catch (err) {
       console.error(err);
@@ -348,6 +362,10 @@
     if (state.duplicateWarning) {
       dupEl.textContent = "⚠️ " + state.duplicateWarning;
       dupEl.className = "geofence-msg geofence-msg--warn";
+      dupEl.hidden = false;
+    } else if (state.chegadaNote) {
+      dupEl.textContent = "✅ " + state.chegadaNote;
+      dupEl.className = "geofence-msg geofence-msg--ok";
       dupEl.hidden = false;
     } else {
       dupEl.hidden = true;
@@ -1860,7 +1878,7 @@
     const [{ data, error }, { data: absenceData, error: absError }] = await Promise.all([
       supabase
         .from("attendance_records")
-        .select("employee_id, direction, created_at, review_status, employees(name, department)")
+        .select("employee_id, direction, created_at, review_status, employees(name, department), locations(type)")
         .gte("created_at", start.toISOString())
         .lt("created_at", end.toISOString())
         .order("created_at", { ascending: true }),
@@ -1905,14 +1923,25 @@
     byEmployee.forEach((emp) => {
       let totalMs = 0;
       let openEntrada = null;
+      let openEntradaType = null;
       const days = new Set();
+      const missingArrivalDays = new Set();
       emp.records.forEach((rec) => {
         days.add(new Date(rec.created_at).toLocaleDateString("pt-PT"));
         if (rec.direction === "entrada") {
           openEntrada = new Date(rec.created_at);
+          openEntradaType = rec.locations?.type || null;
         } else if (rec.direction === "saida" && openEntrada) {
           totalMs += workedMsExcludingLunch(openEntrada, new Date(rec.created_at));
+          // Mesmo padrão detetado no Ponto Individual: Entrada em Serviço
+          // Externo seguida diretamente de uma Saída na obra/escritório,
+          // sem nenhuma Entrada a confirmar a chegada entretanto.
+          const recType = rec.locations?.type;
+          if (openEntradaType === "externo" && (recType === "obra" || recType === "escritorio")) {
+            missingArrivalDays.add(new Date(rec.created_at).toLocaleDateString("pt-PT"));
+          }
           openEntrada = null;
+          openEntradaType = null;
         }
       });
       summaries.push({
@@ -1922,6 +1951,7 @@
         days: days.size,
         incomplete: !!openEntrada,
         absenceDays: emp.absenceDays.size,
+        missingArrivalDays: missingArrivalDays.size,
       });
     });
 
@@ -1930,12 +1960,13 @@
     box.innerHTML = "";
     summaries.forEach((s) => {
       const absenceTag = s.absenceDays ? ` · 🗓️ ${s.absenceDays} falta(s) justificada(s)` : "";
+      const missingArrivalTag = s.missingArrivalDays ? ` · ⚠️ ${s.missingArrivalDays} dia(s) sem confirmar chegada à obra` : "";
       const div = document.createElement("div");
       div.className = "summary-card";
       div.innerHTML = `
         <div>
           <div class="s-name">${escapeHtml(s.name)}</div>
-          <div class="s-sub">${escapeHtml(s.department)} · ${s.days} dia(s) com registo${s.incomplete ? " · ⚠️ tem uma entrada sem saída" : ""}${absenceTag}</div>
+          <div class="s-sub">${escapeHtml(s.department)} · ${s.days} dia(s) com registo${s.incomplete ? " · ⚠️ tem uma entrada sem saída" : ""}${absenceTag}${missingArrivalTag}</div>
         </div>
         <div class="s-hours">${s.hours.toFixed(1)}h<small>total no mês</small></div>
       `;
@@ -1984,7 +2015,7 @@
     const [{ data, error }, { data: absenceData, error: absError }] = await Promise.all([
       supabase
         .from("attendance_records")
-        .select("direction, created_at, review_status, employee_id, tasks")
+        .select("direction, created_at, review_status, employee_id, tasks, locations(type)")
         .eq("employee_id", empId)
         .gte("created_at", start.toISOString())
         .lt("created_at", end.toISOString())
@@ -2017,26 +2048,38 @@
       const t = new Date(rec.created_at);
       const key = ymd(t);
       if (!byDay.has(key)) byDay.set(key, []);
-      byDay.get(key).push({ direction: rec.direction, time: t, tasks: rec.tasks });
+      byDay.get(key).push({ direction: rec.direction, time: t, tasks: rec.tasks, locationType: rec.locations?.type || null });
     });
 
     const dayMap = new Map();
     byDay.forEach((recs, key) => {
       recs.sort((a, b) => a.time - b.time);
       let openEntrada = null;
+      let openEntradaType = null;
       let firstEntrada = null;
       let lastSaida = null;
       let hours = 0;
+      let missingArrival = false;
       const tasksAll = [];
       recs.forEach((r) => {
         if (r.direction === "entrada") {
           if (!firstEntrada) firstEntrada = r.time;
           openEntrada = r.time;
+          openEntradaType = r.locationType;
         } else if (r.direction === "saida") {
           if (!lastSaida || r.time > lastSaida) lastSaida = r.time;
           if (openEntrada) {
             hours += workedMsExcludingLunch(openEntrada, r.time) / 3600000;
+            // Saiu de um Serviço Externo direto para uma Saída na obra/
+            // escritório, sem nenhuma Entrada a confirmar que passou por
+            // lá entretanto — é exatamente o padrão que a Gestão quer
+            // detetar (pode ter ido à obra só no fim do dia para marcar
+            // a saída, sem lá ter estado o resto do tempo).
+            if (openEntradaType === "externo" && (r.locationType === "obra" || r.locationType === "escritorio")) {
+              missingArrival = true;
+            }
             openEntrada = null;
+            openEntradaType = null;
           }
           if (Array.isArray(r.tasks) && r.tasks.length) tasksAll.push(...r.tasks);
         }
@@ -2046,6 +2089,7 @@
         saida: lastSaida,
         hours,
         incomplete: !!openEntrada,
+        missingArrival,
         tasks: tasksAll.length ? tasksAll : null,
       });
     });
@@ -2061,6 +2105,7 @@
       const situacaoParts = [];
       if (absenceReason) situacaoParts.push(`Falta justificada — ${absenceReasonLabel(absenceReason)}`);
       if (att?.incomplete) situacaoParts.push("⚠️ Sem saída registada");
+      if (att?.missingArrival) situacaoParts.push("⚠️ Saída na obra sem confirmar chegada (veio de Serviço Externo)");
       return {
         date,
         dateLabel: new Date(date + "T00:00:00").toLocaleDateString("pt-PT"),
@@ -2068,6 +2113,7 @@
         saida: att?.saida ? timeFmt(att.saida) : "",
         hours: att?.hours || 0,
         incomplete: !!att?.incomplete,
+        missingArrival: !!att?.missingArrival,
         isAbsence: !att && !!absenceReason,
         tarefas: formatTasksSummary(att?.tasks),
         situacao: situacaoParts.join(" · "),
@@ -2102,7 +2148,7 @@
       return;
     }
     const rowsHtml = ts.rows.map((r) => {
-      const cls = [r.isAbsence ? "ts-absence" : "", r.incomplete ? "ts-incomplete" : ""].filter(Boolean).join(" ");
+      const cls = [r.isAbsence ? "ts-absence" : "", (r.incomplete || r.missingArrival) ? "ts-incomplete" : ""].filter(Boolean).join(" ");
       return `
         <tr class="${cls}">
           <td>${r.dateLabel}</td>

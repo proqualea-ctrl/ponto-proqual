@@ -170,6 +170,29 @@ projeto que já está a funcionar. Não é preciso recomeçar do zero.
     está a trabalhar durante o almoço, por isso não deve entrar na conta.
     Isto não muda os horários de Entrada/Saída mostrados — só o total de
     horas calculado a partir deles.
+25. **Confirmar a chegada à obra depois de um Serviço Externo** — resolve
+    o problema de um funcionário marcar Entrada num Serviço Externo (ex:
+    Finanças, banco) e só voltar a aparecer no fim do dia diretamente na
+    obra para marcar a Saída, sem se saber se esteve mesmo lá o resto do
+    tempo:
+    - Quando um funcionário já tem uma Entrada aberta num Serviço Externo
+      e marca uma **nova Entrada** numa obra/escritório, isso passa a ser
+      tratado como a "chegada à obra" — já não aparece o aviso confuso de
+      "entrada duplicada"; em vez disso aparece uma mensagem verde a
+      confirmar que a chegada ficou registada. É por isso mesmo que vale a
+      pena incentivar os funcionários a marcarem presença assim que
+      chegam à obra depois de uma deslocação externa.
+    - Se isso **não** acontecer — ou seja, se aparecer diretamente uma
+      Saída numa obra/escritório logo a seguir a uma Entrada em Serviço
+      Externo, sem nenhuma Entrada a confirmar a chegada entretanto — a
+      app assinala esse dia com **"⚠️ Saída na obra sem confirmar chegada
+      (veio de Serviço Externo)"** na tab **Ponto Individual**, e conta
+      quantos dias assim cada funcionário teve no mês, na tab **Resumo**
+      (ex: "⚠️ 1 dia(s) sem confirmar chegada à obra"). Com as horas de
+      Entrada/Saída à vista, a Gestão consegue avaliar se o tempo fora foi
+      razoável ou não.
+    - Isto não bloqueia nada — o funcionário continua sempre a conseguir
+      marcar presença; é só um sinal para a Gestão rever esses dias.
 
 ---
 
@@ -448,6 +471,14 @@ subpastas). Para atualizar:
    nos separadores **Resumo** e **Ponto Individual** as horas mostradas
    já não incluem a hora de almoço (no exemplo, deve aparecer 7.0h, não
    8.0h).
+10. Testa a "chegada à obra": marca uma Entrada num "Serviço Externo" e,
+    de seguida (sem marcar Saída), marca outra Entrada numa obra —
+    confirma que aparece a mensagem verde de confirmação em vez do aviso
+    de entrada duplicada. Depois, num funcionário diferente, simula o
+    caso contrário (Entrada em Serviço Externo seguida diretamente de
+    Saída numa obra, sem chegada pelo meio) e confirma que aparece o
+    aviso "sem confirmar chegada" no Ponto Individual e a contagem no
+    Resumo mensal.
 
 ---
 
