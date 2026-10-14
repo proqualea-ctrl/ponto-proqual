@@ -266,7 +266,13 @@
         <select class="text-input text-input--sm" id="filter-employee"><option value="">Todos os funcionários</option></select>
         <input class="text-input text-input--sm" id="filter-date" type="date" />
       </div>
-      <button class="link-action" id="export-xlsx-btn">⬇ Exportar para Excel</button>
+      <div class="filters" style="margin-top:-6px;">
+        <label class="muted" style="font-size:12px; align-self:center;">Relatório de Presenças (Excel) — de</label>
+        <input class="text-input text-input--sm" id="export-date-start" type="date" />
+        <label class="muted" style="font-size:12px; align-self:center;">até</label>
+        <input class="text-input text-input--sm" id="export-date-end" type="date" />
+      </div>
+      <button class="link-action" id="export-xlsx-btn">⬇ Exportar Relatório de Presenças (Excel)</button>
       <button class="link-action" id="export-backup-btn" hidden>💾 Cópia de segurança completa (todos os dados)</button>
       <div class="list" id="records-list"></div>
     </div>

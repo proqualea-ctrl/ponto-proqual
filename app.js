@@ -1735,44 +1735,370 @@
   });
 
   // -----------------------------------------------------------
-  // Gestão: exportar registos para Excel
+  // Gestão: Relatório de Presenças (Excel) — ficheiro com 3 separadores
+  // para um intervalo de datas à escolha, com TODOS os funcionários:
+  //   1) "Presenças Diárias"  — um dia por linha, por funcionário
+  //   2) "Resumo"             — totais por funcionário + "Pontos a verificar"
+  //   3) "Registos Originais" — os registos em bruto (como antes)
   // -----------------------------------------------------------
-  document.getElementById("export-xlsx-btn").addEventListener("click", () => {
-    const rows = (state.dashboard.records || []).map((rec) => ({
-      Funcionário: rec.employees?.name || "",
-      Departamento: rec.employees?.department || "",
-      Local: rec.locations?.name || "",
-      Tipo: locationLabel(rec.locations?.type),
-      Direção: rec.direction === "entrada" ? "Entrada" : "Saída",
-      "Data/Hora": new Date(rec.created_at).toLocaleString("pt-PT"),
-      Latitude: rec.latitude || "",
-      Longitude: rec.longitude || "",
-      "Distância (m)": rec.distance_m != null ? Math.round(rec.distance_m) : "",
-      "Dentro da área": rec.within_geofence == null ? "" : (rec.within_geofence ? "Sim" : "Não"),
-      Nota: rec.note || "",
-      Tarefas: formatTasksSummary(rec.tasks),
-      Estado: rec.review_status ? rec.review_status.charAt(0).toUpperCase() + rec.review_status.slice(1) : "",
-    }));
-    if (!rows.length) { toast("Não há registos para exportar", true); return; }
+  const WEEKDAY_PT = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+  const LATE_ENTRY_HOUR = 8; // "Entrada tardia" = entrada depois das 08:00
 
-    // Cabeçalho oficial (identidade da empresa) antes da tabela de dados —
-    // NUIT/morada só aparecem se estiverem preenchidos em config.js.
+  (function initExportDateRange() {
+    const startInput = document.getElementById("export-date-start");
+    const endInput = document.getElementById("export-date-end");
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const toVal = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
     const now = new Date();
-    const headerLines = [[cfg.COMPANY_NAME || "PROQUAL Engenheiros e Associados, Lda"]];
-    if (cfg.COMPANY_TAGLINE) headerLines.push([cfg.COMPANY_TAGLINE]);
-    if (cfg.COMPANY_NUIT) headerLines.push([`NUIT: ${cfg.COMPANY_NUIT}`]);
-    if (cfg.COMPANY_ADDRESS) headerLines.push([cfg.COMPANY_ADDRESS]);
-    headerLines.push(["Relatório de Registos de Presença"]);
-    headerLines.push([`Documento gerado automaticamente pelo sistema ${cfg.APP_TITLE} em ${now.toLocaleString("pt-PT")}`]);
-    headerLines.push([]); // linha em branco antes da tabela
+    if (!startInput.value) startInput.value = toVal(new Date(now.getFullYear(), now.getMonth(), 1));
+    if (!endInput.value) endInput.value = toVal(now);
+  })();
 
-    const columns = Object.keys(rows[0]);
-    const aoa = [...headerLines, columns, ...rows.map((r) => columns.map((c) => r[c]))];
+  function colLetter(idx) {
+    return String.fromCharCode(65 + idx); // só precisamos de colunas A–J (idx 0–9)
+  }
+  function applyNumFormats(ws, specs) {
+    specs.forEach(({ r, c, z }) => {
+      const ref = colLetter(c) + (r + 1);
+      if (ws[ref]) ws[ref].z = z;
+    });
+  }
+  function dayFractionOfTime(date) {
+    return (date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds()) / 86400;
+  }
+  function isLateEntry(date) {
+    return date.getHours() > LATE_ENTRY_HOUR || (date.getHours() === LATE_ENTRY_HOUR && date.getMinutes() > 0);
+  }
+  function entradaObservacao(rec) {
+    if (!rec || !rec.note) return "";
+    const estado = rec.reviewStatus ? ` (Estado: ${rec.reviewStatus.charAt(0).toUpperCase() + rec.reviewStatus.slice(1)})` : "";
+    return `[Entrada] ${rec.note}${estado}`;
+  }
+  function absenceObservacao(abs, label) {
+    const when = abs.reviewed_at ? new Date(abs.reviewed_at).toLocaleString("pt-PT") : "—";
+    const who = abs.reviewed_by || "—";
+    return `${label} — justificação aprovada por ${who} em ${when} (registo do tipo "${absenceReasonLabel(abs.reason)}").`;
+  }
+  function extractHomeOfficeTasks(note) {
+    if (!note) return "";
+    const m = note.match(/^\s*home\s*office\s*[:\-—]?\s*/i);
+    return (m ? note.slice(m[0].length) : note).trim();
+  }
+
+  // Agrupa registos de presença + faltas aprovadas por funcionário e por
+  // dia, no mesmo espírito do Ponto Individual, mas para TODOS os
+  // funcionários ao mesmo tempo e com a localização de cada Entrada/Saída
+  // (para detetar "chegada"/"saída em locais diferentes").
+  function buildPresenceReport(attendanceRecords, approvedAbsences) {
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const ymd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+    const employeesById = new Map();
+    function ensureEmp(id, name, department) {
+      if (!employeesById.has(id)) employeesById.set(id, { id, name: name || "—", department: department || "—", byDay: new Map() });
+      return employeesById.get(id);
+    }
+    function dayBucket(emp, key) {
+      if (!emp.byDay.has(key)) emp.byDay.set(key, []);
+      return emp.byDay.get(key);
+    }
+
+    attendanceRecords.forEach((rec) => {
+      const emp = ensureEmp(rec.employee_id, rec.employees?.name, rec.employees?.department);
+      const t = new Date(rec.created_at);
+      dayBucket(emp, ymd(t)).push({
+        direction: rec.direction, time: t, note: rec.note || "", tasks: rec.tasks,
+        locationName: rec.locations?.name || "—", reviewStatus: rec.review_status || null,
+      });
+    });
+    // Uma falta aprovada também conta como "dia" do funcionário, mesmo sem
+    // nenhum registo de presença nesse dia — guardada à parte (fora do
+    // array de registos) para não ser confundida com uma Entrada/Saída.
+    approvedAbsences.forEach((abs) => {
+      const emp = ensureEmp(abs.employee_id, abs.employees?.name, abs.employees?.department);
+      dayBucket(emp, abs.absence_date).absence = abs;
+    });
+
+    const employees = [...employeesById.values()].sort((a, b) => a.name.localeCompare(b.name, "pt"));
+
+    employees.forEach((emp) => {
+      emp.dayRows = [...emp.byDay.keys()].sort().map((key) => {
+        const bucket = emp.byDay.get(key);
+        const recs = bucket.filter((r) => r.direction).sort((a, b) => a.time - b.time);
+        const absence = bucket.absence;
+
+        let entrada = null, saida = null, openEntrada = null, hoursMs = 0;
+        const tasksAll = [];
+        recs.forEach((r) => {
+          if (r.direction === "entrada") {
+            if (!entrada) entrada = r;
+            openEntrada = r;
+          } else if (r.direction === "saida") {
+            saida = r; // guarda sempre a última saída do dia
+            if (openEntrada) {
+              hoursMs += workedMsExcludingLunch(openEntrada.time, r.time);
+              openEntrada = null;
+            }
+            if (Array.isArray(r.tasks) && r.tasks.length) tasksAll.push(...r.tasks);
+          }
+        });
+
+        if (!recs.length && !absence) return null;
+
+        const date = new Date(key + "T00:00:00");
+        const isHomeOffice = !!absence && absence.reason === "outro" && /^\s*home\s*office/i.test(absence.note || "");
+
+        let situacao, local, tarefas, observacoes;
+        if (!recs.length && absence) {
+          situacao = isHomeOffice ? "Home Office" : `Falta justificada — ${absenceReasonLabel(absence.reason)}`;
+          local = isHomeOffice ? "Home Office" : "—";
+          tarefas = isHomeOffice ? extractHomeOfficeTasks(absence.note) : "";
+          observacoes = absenceObservacao(absence, isHomeOffice ? "Home Office" : absenceReasonLabel(absence.reason));
+        } else if (entrada && saida) {
+          situacao = "Completo";
+          local = entrada.locationName === saida.locationName ? entrada.locationName : `${entrada.locationName} → ${saida.locationName}`;
+          tarefas = formatTasksSummary(tasksAll);
+          observacoes = entradaObservacao(entrada);
+        } else if (entrada && !saida) {
+          situacao = "Sem saída";
+          local = entrada.locationName;
+          tarefas = "";
+          observacoes = entradaObservacao(entrada);
+        } else {
+          situacao = "Sem entrada";
+          local = saida.locationName;
+          tarefas = formatTasksSummary(saida.tasks);
+          observacoes = "";
+        }
+
+        return {
+          date, dia: WEEKDAY_PT[date.getDay()], local,
+          entradaTime: entrada ? entrada.time : null,
+          saidaTime: saida ? saida.time : null,
+          hoursMs, situacao, tarefas, observacoes,
+          isHomeOffice, entradaNote: entrada ? entrada.note : "",
+          lateEntry: !!(entrada && isLateEntry(entrada.time)),
+          localDiferente: !!(entrada && saida && entrada.locationName !== saida.locationName),
+          localForMode: saida ? saida.locationName : (entrada ? entrada.locationName : null),
+        };
+      }).filter(Boolean);
+    });
+
+    return employees;
+  }
+
+  function buildResumoRows(employees) {
+    return employees.map((emp) => {
+      const rows = emp.dayRows;
+      const diasCompletos = rows.filter((r) => r.situacao === "Completo").length;
+      const homeOfficeCount = rows.filter((r) => r.isHomeOffice).length;
+      const diasIncompletos = rows.filter((r) => r.situacao === "Sem entrada" || r.situacao === "Sem saída").length;
+      const totalHoursMs = rows.reduce((sum, r) => sum + (r.hoursMs || 0), 0);
+      const mediaHorasMs = diasCompletos ? totalHoursMs / diasCompletos : 0;
+
+      const avgFrac = (arr) => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null);
+      const entradaMediaFrac = avgFrac(rows.filter((r) => r.entradaTime).map((r) => dayFractionOfTime(r.entradaTime)));
+      const saidaMediaFrac = avgFrac(rows.filter((r) => r.saidaTime).map((r) => dayFractionOfTime(r.saidaTime)));
+
+      const localCounts = new Map();
+      rows.forEach((r) => { if (r.localForMode) localCounts.set(r.localForMode, (localCounts.get(r.localForMode) || 0) + 1); });
+      let localPrincipal = "—", bestCount = 0;
+      localCounts.forEach((count, name) => { if (count > bestCount) { bestCount = count; localPrincipal = name; } });
+
+      const ocorrencias = [];
+      rows.forEach((r) => {
+        if (r.situacao === "Sem entrada") ocorrencias.push({ date: r.date, text: "Falta registo de entrada." });
+        if (r.situacao === "Sem saída") ocorrencias.push({ date: r.date, text: "Falta registo de saída." });
+        if (r.entradaTime && r.lateEntry) {
+          const hm = `${String(r.entradaTime.getHours()).padStart(2, "0")}:${String(r.entradaTime.getMinutes()).padStart(2, "0")}`;
+          ocorrencias.push({ date: r.date, text: `Entrada tardia (${hm}) — ${r.entradaNote ? "com justificação." : "sem justificação registada."}` });
+        }
+        if (r.localDiferente) ocorrencias.push({ date: r.date, text: `Entrada e saída em locais diferentes (${r.local}).` });
+      });
+
+      return {
+        name: emp.name, localPrincipal,
+        diasComRegisto: rows.length, diasCompletos, homeOfficeCount, diasIncompletos,
+        totalHoursMs, mediaHorasMs, entradaMediaFrac, saidaMediaFrac, ocorrencias,
+      };
+    });
+  }
+
+  // Mesmo bloco de identidade da empresa usado no export individual e no
+  // PDF — nome, e (se preenchidos em config.js) o lema, o NUIT e a morada.
+  function companyHeaderLines() {
+    const lines = [[cfg.COMPANY_NAME || "PROQUAL Engenheiros e Associados, Lda"]];
+    if (cfg.COMPANY_TAGLINE) lines.push([cfg.COMPANY_TAGLINE]);
+    if (cfg.COMPANY_NUIT) lines.push([`NUIT: ${cfg.COMPANY_NUIT}`]);
+    if (cfg.COMPANY_ADDRESS) lines.push([cfg.COMPANY_ADDRESS]);
+    return lines;
+  }
+
+  function buildPresencasDiariasSheet(employees, periodoLabel, geradoLabel) {
+    const header = ["Funcionário", "Data", "Dia", "Local", "Entrada", "Saída", "Horas", "Situação", "Tarefas realizadas", "Observações / Justificações"];
+    const aoa = [
+      ...companyHeaderLines(),
+      ["Registo de Presenças — Diário por Funcionário"],
+      [`Período: ${periodoLabel}  ·  Gerado em ${geradoLabel}`],
+      [],
+      header,
+    ];
+    const formatSpecs = [];
+    employees.forEach((emp) => {
+      emp.dayRows.forEach((r) => {
+        const rowIdx = aoa.length;
+        aoa.push([
+          emp.name, r.date, r.dia, r.local,
+          r.entradaTime ? dayFractionOfTime(r.entradaTime) : "",
+          r.saidaTime ? dayFractionOfTime(r.saidaTime) : "",
+          r.hoursMs ? r.hoursMs / 86400000 : "",
+          r.situacao, r.tarefas, r.observacoes,
+        ]);
+        formatSpecs.push({ r: rowIdx, c: 1, z: "dd/mm/yyyy" });
+        if (r.entradaTime) formatSpecs.push({ r: rowIdx, c: 4, z: "h:mm" });
+        if (r.saidaTime) formatSpecs.push({ r: rowIdx, c: 5, z: "h:mm" });
+        if (r.hoursMs) formatSpecs.push({ r: rowIdx, c: 6, z: "[h]:mm" });
+      });
+    });
     const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = [{ wch: 16 }, { wch: 11 }, { wch: 10 }, { wch: 24 }, { wch: 9 }, { wch: 9 }, { wch: 8 }, { wch: 13 }, { wch: 55 }, { wch: 60 }];
+    applyNumFormats(ws, formatSpecs);
+    return ws;
+  }
+
+  function buildResumoSheet(resumoRows, periodoLabel, geradoLabel) {
+    const mainHeader = ["Funcionário", "Local principal", "Dias com registo", "Dias completos", "Home Office (justif.)", "Dias incompletos", "Total de horas", "Média horas/dia", "Entrada média", "Saída média"];
+    const aoa = [
+      ...companyHeaderLines(),
+      ["Resumo por Funcionário"],
+      [`Período: ${periodoLabel}  ·  Gerado em ${geradoLabel}`],
+      [],
+      mainHeader,
+    ];
+    const formatSpecs = [];
+    const merges = [];
+    let totDias = 0, totCompletos = 0, totHomeOffice = 0, totIncompletos = 0, totHoras = 0;
+    resumoRows.forEach((r) => {
+      const rowIdx = aoa.length;
+      aoa.push([
+        r.name, r.localPrincipal, r.diasComRegisto, r.diasCompletos, r.homeOfficeCount, r.diasIncompletos,
+        r.totalHoursMs / 86400000,
+        r.mediaHorasMs ? r.mediaHorasMs / 86400000 : "",
+        r.entradaMediaFrac != null ? r.entradaMediaFrac : "",
+        r.saidaMediaFrac != null ? r.saidaMediaFrac : "",
+      ]);
+      formatSpecs.push({ r: rowIdx, c: 6, z: "[h]:mm" });
+      if (r.mediaHorasMs) formatSpecs.push({ r: rowIdx, c: 7, z: "[h]:mm" });
+      if (r.entradaMediaFrac != null) formatSpecs.push({ r: rowIdx, c: 8, z: "h:mm" });
+      if (r.saidaMediaFrac != null) formatSpecs.push({ r: rowIdx, c: 9, z: "h:mm" });
+      totDias += r.diasComRegisto; totCompletos += r.diasCompletos;
+      totHomeOffice += r.homeOfficeCount; totIncompletos += r.diasIncompletos; totHoras += r.totalHoursMs;
+    });
+    const totalRowIdx = aoa.length;
+    aoa.push(["TOTAL", "", totDias, totCompletos, totHomeOffice, totIncompletos, totHoras / 86400000, "", "", ""]);
+    formatSpecs.push({ r: totalRowIdx, c: 6, z: "[h]:mm" });
+
+    aoa.push([]);
+    aoa.push([]);
+    aoa.push(["Pontos a verificar"]);
+    const subHeaderIdx = aoa.length;
+    aoa.push(["Funcionário", "Data", "Ocorrência"]);
+    merges.push({ s: { r: subHeaderIdx, c: 2 }, e: { r: subHeaderIdx, c: 9 } });
+
+    resumoRows.forEach((r) => {
+      r.ocorrencias.forEach((o) => {
+        const rowIdx = aoa.length;
+        aoa.push([r.name, o.date, o.text]);
+        formatSpecs.push({ r: rowIdx, c: 1, z: "dd/mm/yyyy" });
+        merges.push({ s: { r: rowIdx, c: 2 }, e: { r: rowIdx, c: 9 } });
+      });
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = [{ wch: 18 }, { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 13 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }];
+    ws["!merges"] = merges;
+    applyNumFormats(ws, formatSpecs);
+    return ws;
+  }
+
+  function buildRegistosOriginaisSheet(attendanceRecords) {
+    const header = ["Funcionário", "Departamento", "Local", "Direção", "Data/Hora", "Nota", "Tarefas", "Estado"];
+    const aoa = [
+      ...companyHeaderLines(),
+      ["Registos Originais (como exportados do sistema)"],
+      [],
+      header,
+    ];
+    const sorted = [...attendanceRecords].sort((a, b) => {
+      const nameA = a.employees?.name || "", nameB = b.employees?.name || "";
+      if (nameA !== nameB) return nameA.localeCompare(nameB, "pt");
+      return new Date(a.created_at) - new Date(b.created_at);
+    });
+    const formatSpecs = [];
+    sorted.forEach((rec) => {
+      const rowIdx = aoa.length;
+      aoa.push([
+        rec.employees?.name || "", rec.employees?.department || "", rec.locations?.name || "",
+        rec.direction === "entrada" ? "Entrada" : "Saída",
+        new Date(rec.created_at),
+        rec.note || "", formatTasksSummary(rec.tasks),
+        rec.review_status ? rec.review_status.charAt(0).toUpperCase() + rec.review_status.slice(1) : "",
+      ]);
+      formatSpecs.push({ r: rowIdx, c: 4, z: "dd/mm/yyyy hh:mm" });
+    });
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = [{ wch: 16 }, { wch: 13 }, { wch: 20 }, { wch: 10 }, { wch: 17 }, { wch: 60 }, { wch: 55 }, { wch: 11 }];
+    applyNumFormats(ws, formatSpecs);
+    return ws;
+  }
+
+  document.getElementById("export-xlsx-btn").addEventListener("click", async () => {
+    const startVal = document.getElementById("export-date-start").value;
+    const endVal = document.getElementById("export-date-end").value;
+    if (!startVal || !endVal) { toast("Escolhe a data de início e de fim do relatório", true); return; }
+    if (startVal > endVal) { toast("A data de início tem de ser anterior (ou igual) à data de fim", true); return; }
+
+    const startDate = new Date(startVal + "T00:00:00");
+    const endDate = new Date(endVal + "T23:59:59.999");
+
+    const [{ data: attendance, error: e1 }, { data: absences, error: e2 }] = await Promise.all([
+      supabase
+        .from("attendance_records")
+        .select("employee_id, direction, created_at, note, tasks, review_status, employees(name, department), locations(name, type)")
+        .gte("created_at", startDate.toISOString())
+        .lte("created_at", endDate.toISOString())
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("absence_requests")
+        .select("employee_id, absence_date, status, reason, note, reviewed_by, reviewed_at, employees(name, department)")
+        .eq("status", "aprovado")
+        .gte("absence_date", startVal)
+        .lte("absence_date", endVal),
+    ]);
+    if (e1) { console.error(e1); toast("Erro ao carregar os registos para o relatório", true); return; }
+    if (e2) console.error(e2); // não bloqueia o relatório por causa das faltas
+
+    const attendanceRows = attendance || [];
+    const approvedAbsences = absences || [];
+    if (!attendanceRows.length && !approvedAbsences.length) {
+      toast("Não há registos nem faltas aprovadas neste período", true);
+      return;
+    }
+
+    const employees = buildPresenceReport(attendanceRows, approvedAbsences);
+    const resumoRows = buildResumoRows(employees);
+    const periodoLabel = `${startDate.toLocaleDateString("pt-PT")} a ${endDate.toLocaleDateString("pt-PT")}`;
+    const geradoLabel = new Date().toLocaleString("pt-PT");
+
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Registos");
-    const stamp = now.toISOString().slice(0, 10);
-    XLSX.writeFile(wb, `presencas-proqual-${stamp}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, buildPresencasDiariasSheet(employees, periodoLabel, geradoLabel), "Presenças Diárias");
+    XLSX.utils.book_append_sheet(wb, buildResumoSheet(resumoRows, periodoLabel, geradoLabel), "Resumo");
+    XLSX.utils.book_append_sheet(wb, buildRegistosOriginaisSheet(attendanceRows), "Registos Originais");
+
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const fmtDDMM = (d) => `${pad2(d.getDate())}-${pad2(d.getMonth() + 1)}`;
+    const filename = `Presencas_PROQUAL-${fmtDDMM(startDate)}_a_${fmtDDMM(endDate)}-${endDate.getFullYear()}.xlsx`;
+    XLSX.writeFile(wb, filename);
   });
 
   // -----------------------------------------------------------

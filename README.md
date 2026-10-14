@@ -29,7 +29,9 @@ projeto que já está a funcionar. Não é preciso recomeçar do zero.
    "Entrada" quando já tem uma entrada sem saída correspondente (ou
    vice-versa), aparece um aviso antes de confirmar.
 5. **Exportar para Excel** — na área de Gestão, tab "Registos", botão
-   "Exportar para Excel" gera um ficheiro `.xlsx` com os registos filtrados.
+   "Exportar Relatório de Presenças (Excel)" gera um ficheiro `.xlsx` para um
+   intervalo de datas à escolha (ver item 26 para o formato atual, com 3
+   separadores).
 6. **Resumo mensal por funcionário** — novo separador "Resumo" com o total
    de horas e dias trabalhados por funcionário, num mês à escolha (inclui
    também as faltas já aprovadas nesse mês — ver item 14).
@@ -193,6 +195,40 @@ projeto que já está a funcionar. Não é preciso recomeçar do zero.
       razoável ou não.
     - Isto não bloqueia nada — o funcionário continua sempre a conseguir
       marcar presença; é só um sinal para a Gestão rever esses dias.
+26. **Novo Relatório de Presenças em Excel (3 separadores)** — na tab
+    **Registos**, o antigo botão "Exportar para Excel" foi substituído por
+    **"⬇ Exportar Relatório de Presenças (Excel)"**, com dois campos de
+    data (**de** / **até**) para escolher o intervalo — por omissão vem
+    preenchido do dia 1 do mês atual até hoje. O ficheiro gerado inclui
+    **todos os funcionários** (não só os filtros do ecrã) e tem três
+    separadores:
+    - **"Presenças Diárias"** — uma linha por funcionário por dia, com
+      Local, Entrada, Saída, Horas (já sem a hora de almoço — ver item 24),
+      Situação (Completo / Sem entrada / Sem saída / Home Office / Falta
+      justificada — motivo), Tarefas realizadas e Observações/Justificações
+      (nota da entrada e/ou detalhes da falta aprovada).
+    - **"Resumo"** — totais por funcionário (dias com registo, dias
+      completos, dias de Home Office, dias incompletos, total de horas,
+      média de horas/dia, hora média de entrada/saída e local principal) e,
+      por baixo, uma tabela **"Pontos a verificar"** que lista, por
+      funcionário e data, cada ocorrência a rever: falta de entrada ou de
+      saída, **entrada tardia** (depois das **08:00**, assinalando se há ou
+      não justificação na nota) e entrada/saída em locais diferentes.
+    - **"Registos Originais"** — os registos de presença em bruto do
+      período, como antes.
+    - **"Home Office"** é detetado automaticamente a partir de uma falta já
+      **aprovada** pela Gestão com motivo **"Outro"** cuja nota comece por
+      "Home Office" (ex.: nota "Home Office\nElaboração de relatório
+      mensal" → aparece como Home Office e a primeira linha é retirada para
+      mostrar só a descrição da tarefa).
+    - **Duas notas sobre o formato:** (1) a coluna "Horas" segue a mesma
+      regra do Resumo mensal/Ponto Individual e já não conta a hora de
+      almoço (12h-13h) — se precisares de horas em bruto (sem este
+      ajuste), diz para ajustarmos; (2) a versão gratuita da biblioteca de
+      Excel usada pela app não escreve cores/negrito nas células, por isso
+      o ficheiro sai sem o fundo azul-marinho nos cabeçalhos — as colunas,
+      os dados e os formatos de hora/data são os mesmos, só a cor é que
+      não é possível replicar sem mudar de biblioteca (paga).
 
 ---
 
@@ -423,8 +459,9 @@ subpastas). Para atualizar:
    - a tab **Registos** mostra o registo de Saída que acabaste de enviar
      com a lista de tarefas que escreveste (ex: "🛠️ Instalação elétrica
      (60%), Reunião com cliente (40%)");
-   - o botão **Exportar para Excel** descarrega um `.xlsx` (agora com uma
-     coluna "Tarefas");
+   - o botão **⬇ Exportar Relatório de Presenças (Excel)** descarrega um
+     `.xlsx` com 3 separadores (ver item 26) para o intervalo de datas
+     escolhido;
    - (se fores admin) o botão **💾 Cópia de segurança completa** descarrega
      um `.xlsx` com vários separadores (Funcionários, Locais, Registos,
      Faltas, Histórico) — não deve aparecer para uma conta "Encarregado";
@@ -479,6 +516,16 @@ subpastas). Para atualizar:
     Saída numa obra, sem chegada pelo meio) e confirma que aparece o
     aviso "sem confirmar chegada" no Ponto Individual e a contagem no
     Resumo mensal.
+11. Testa o novo **Relatório de Presenças**: na tab **Registos**, escolhe
+    um intervalo de datas que inclua pelo menos um dia completo, um dia de
+    Home Office (aprova uma falta com motivo "Outro" e nota a começar por
+    "Home Office") e um dia com entrada tardia (depois das 08:00), e toca
+    em **⬇ Exportar Relatório de Presenças (Excel)**. Abre o ficheiro e
+    confirma os 3 separadores — "Presenças Diárias" (uma linha por
+    funcionário/dia, com a Situação e as Observações certas), "Resumo"
+    (totais por funcionário + a tabela "Pontos a verificar" com as
+    ocorrências do intervalo) e "Registos Originais" (os registos em
+    bruto).
 
 ---
 
