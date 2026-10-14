@@ -1754,15 +1754,6 @@
     if (!endInput.value) endInput.value = toVal(now);
   })();
 
-  function colLetter(idx) {
-    return String.fromCharCode(65 + idx); // só precisamos de colunas A–J (idx 0–9)
-  }
-  function applyNumFormats(ws, specs) {
-    specs.forEach(({ r, c, z }) => {
-      const ref = colLetter(c) + (r + 1);
-      if (ws[ref]) ws[ref].z = z;
-    });
-  }
   function dayFractionOfTime(date) {
     return (date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds()) / 86400;
   }
@@ -1924,131 +1915,203 @@
     });
   }
 
-  // Mesmo bloco de identidade da empresa usado no export individual e no
-  // PDF — nome, e (se preenchidos em config.js) o lema, o NUIT e a morada.
-  function companyHeaderLines() {
-    const lines = [[cfg.COMPANY_NAME || "PROQUAL Engenheiros e Associados, Lda"]];
-    if (cfg.COMPANY_TAGLINE) lines.push([cfg.COMPANY_TAGLINE]);
-    if (cfg.COMPANY_NUIT) lines.push([`NUIT: ${cfg.COMPANY_NUIT}`]);
-    if (cfg.COMPANY_ADDRESS) lines.push([cfg.COMPANY_ADDRESS]);
-    return lines;
+  // -----------------------------------------------------------
+  // Estilo visual do relatório — replica o cabeçalho a azul-marinho e o
+  // código de cores por situação do modelo que a Gestão forneceu como
+  // referência. Usa a biblioteca ExcelJS (em vez da SheetJS usada nos
+  // outros exports da app) porque é a única das duas, gratuita, capaz de
+  // escrever cor/negrito/contornos nas células.
+  // -----------------------------------------------------------
+  const REPORT_COLOR = {
+    navy: "FF1F3864", white: "FFFFFFFF",
+    bandA: "FFFFFFFF", bandB: "FFEEF2F8",
+    totalFill: "FFD9E1F2",
+    green: "FF2E7D32",
+    blue: "FF1F5FA8", blueFill: "FFDDEBF7",
+    red: "FFC00000", redFill: "FFFCE4E4",
+    orange: "FFC55A11",
+    borderGray: "FFBFBFBF",
+  };
+  const THIN_BORDER = { style: "thin", color: { argb: REPORT_COLOR.borderGray } };
+  const ALL_BORDERS = { top: THIN_BORDER, left: THIN_BORDER, bottom: THIN_BORDER, right: THIN_BORDER };
+
+  // Bloco de identidade da empresa no topo da folha — nome, e (se
+  // preenchidos em config.js) o lema, o NUIT e a morada.
+  function addTitleBlock(ws, titleText, periodoLabel, geradoLabel) {
+    ws.addRow([cfg.COMPANY_NAME || "PROQUAL Engenheiros e Associados, Lda"]).getCell(1).font = { bold: true, size: 14, color: { argb: REPORT_COLOR.navy } };
+    if (cfg.COMPANY_TAGLINE) ws.addRow([cfg.COMPANY_TAGLINE]).getCell(1).font = { bold: true, size: 12 };
+    if (cfg.COMPANY_NUIT) ws.addRow([`NUIT: ${cfg.COMPANY_NUIT}`]).getCell(1).font = { size: 10 };
+    if (cfg.COMPANY_ADDRESS) ws.addRow([cfg.COMPANY_ADDRESS]).getCell(1).font = { size: 10 };
+    ws.addRow([titleText]).getCell(1).font = { bold: true, size: 12 };
+    if (periodoLabel) ws.addRow([`Período: ${periodoLabel}  ·  Gerado em ${geradoLabel}`]).getCell(1).font = { bold: true, size: 10 };
+    ws.addRow([]);
   }
 
-  function buildPresencasDiariasSheet(employees, periodoLabel, geradoLabel) {
+  function addHeaderRow(ws, labels) {
+    const row = ws.addRow(labels);
+    row.height = 28;
+    labels.forEach((_, i) => {
+      const cell = row.getCell(i + 1);
+      cell.font = { bold: true, size: 10, color: { argb: REPORT_COLOR.white } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: REPORT_COLOR.navy } };
+      cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      cell.border = ALL_BORDERS;
+    });
+    return row;
+  }
+
+  function styleDataRow(row, ncols, fillArgb) {
+    for (let c = 1; c <= ncols; c++) {
+      const cell = row.getCell(c);
+      cell.border = ALL_BORDERS;
+      cell.font = cell.font || { size: 10 };
+      if (fillArgb) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fillArgb } };
+    }
+  }
+
+  // Cor/negrito/fundo da célula "Situação" — verde para dias completos,
+  // azul para ausências justificadas (Home Office ou outro motivo), e
+  // vermelho (a chamar a atenção) para dias com registo em falta.
+  function situacaoStyle(situacao) {
+    if (situacao === "Completo") return { font: REPORT_COLOR.green, fill: null, bold: false };
+    if (situacao === "Sem entrada" || situacao === "Sem saída") return { font: REPORT_COLOR.red, fill: REPORT_COLOR.redFill, bold: true };
+    return { font: REPORT_COLOR.blue, fill: REPORT_COLOR.blueFill, bold: true }; // Home Office / Falta justificada — X
+  }
+
+  function buildPresencasDiariasSheet(wb, employees, periodoLabel, geradoLabel) {
+    const ws = wb.addWorksheet("Presenças Diárias");
+    ws.columns = [{ width: 16 }, { width: 11 }, { width: 10 }, { width: 24 }, { width: 9 }, { width: 9 }, { width: 8 }, { width: 13 }, { width: 55 }, { width: 60 }];
+    addTitleBlock(ws, "Registo de Presenças — Diário por Funcionário", periodoLabel, geradoLabel);
     const header = ["Funcionário", "Data", "Dia", "Local", "Entrada", "Saída", "Horas", "Situação", "Tarefas realizadas", "Observações / Justificações"];
-    const aoa = [
-      ...companyHeaderLines(),
-      ["Registo de Presenças — Diário por Funcionário"],
-      [`Período: ${periodoLabel}  ·  Gerado em ${geradoLabel}`],
-      [],
-      header,
-    ];
-    const formatSpecs = [];
-    employees.forEach((emp) => {
+    const headerRow = addHeaderRow(ws, header);
+
+    employees.forEach((emp, empIdx) => {
+      const band = empIdx % 2 === 0 ? REPORT_COLOR.bandA : REPORT_COLOR.bandB;
       emp.dayRows.forEach((r) => {
-        const rowIdx = aoa.length;
-        aoa.push([
+        const row = ws.addRow([
           emp.name, r.date, r.dia, r.local,
-          r.entradaTime ? dayFractionOfTime(r.entradaTime) : "",
-          r.saidaTime ? dayFractionOfTime(r.saidaTime) : "",
-          r.hoursMs ? r.hoursMs / 86400000 : "",
+          r.entradaTime ? dayFractionOfTime(r.entradaTime) : null,
+          r.saidaTime ? dayFractionOfTime(r.saidaTime) : null,
+          r.hoursMs ? r.hoursMs / 86400000 : null,
           r.situacao, r.tarefas, r.observacoes,
         ]);
-        formatSpecs.push({ r: rowIdx, c: 1, z: "dd/mm/yyyy" });
-        if (r.entradaTime) formatSpecs.push({ r: rowIdx, c: 4, z: "h:mm" });
-        if (r.saidaTime) formatSpecs.push({ r: rowIdx, c: 5, z: "h:mm" });
-        if (r.hoursMs) formatSpecs.push({ r: rowIdx, c: 6, z: "[h]:mm" });
+        styleDataRow(row, 10, band);
+        row.getCell(1).alignment = { vertical: "top" };
+        row.getCell(2).alignment = { horizontal: "center", vertical: "top" };
+        row.getCell(2).numFmt = "dd/mm/yyyy";
+        row.getCell(3).alignment = { horizontal: "center", vertical: "top" };
+        row.getCell(4).alignment = { vertical: "top", wrapText: true };
+        row.getCell(5).alignment = { horizontal: "center", vertical: "top" };
+        row.getCell(6).alignment = { horizontal: "center", vertical: "top" };
+        row.getCell(7).alignment = { horizontal: "center", vertical: "top" };
+        if (r.entradaTime) row.getCell(5).numFmt = "h:mm";
+        if (r.saidaTime) row.getCell(6).numFmt = "h:mm";
+        if (r.hoursMs) row.getCell(7).numFmt = "[h]:mm";
+        row.getCell(9).alignment = { vertical: "top", wrapText: true };
+        row.getCell(10).alignment = { vertical: "top", wrapText: true };
+        const sc = situacaoStyle(r.situacao);
+        const situCell = row.getCell(8);
+        situCell.font = { bold: sc.bold, size: 10, color: { argb: sc.font } };
+        situCell.alignment = { horizontal: "center", vertical: "top" };
+        if (sc.fill) situCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: sc.fill } };
       });
     });
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws["!cols"] = [{ wch: 16 }, { wch: 11 }, { wch: 10 }, { wch: 24 }, { wch: 9 }, { wch: 9 }, { wch: 8 }, { wch: 13 }, { wch: 55 }, { wch: 60 }];
-    applyNumFormats(ws, formatSpecs);
+    ws.views = [{ state: "frozen", xSplit: 1, ySplit: headerRow.number }];
     return ws;
   }
 
-  function buildResumoSheet(resumoRows, periodoLabel, geradoLabel) {
+  function buildResumoSheet(wb, resumoRows, periodoLabel, geradoLabel) {
+    const ws = wb.addWorksheet("Resumo");
+    ws.columns = [{ width: 18 }, { width: 22 }, { width: 12 }, { width: 12 }, { width: 13 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 10 }, { width: 10 }];
+    addTitleBlock(ws, "Resumo por Funcionário", periodoLabel, geradoLabel);
     const mainHeader = ["Funcionário", "Local principal", "Dias com registo", "Dias completos", "Home Office (justif.)", "Dias incompletos", "Total de horas", "Média horas/dia", "Entrada média", "Saída média"];
-    const aoa = [
-      ...companyHeaderLines(),
-      ["Resumo por Funcionário"],
-      [`Período: ${periodoLabel}  ·  Gerado em ${geradoLabel}`],
-      [],
-      mainHeader,
-    ];
-    const formatSpecs = [];
-    const merges = [];
+    const headerRow = addHeaderRow(ws, mainHeader);
+
     let totDias = 0, totCompletos = 0, totHomeOffice = 0, totIncompletos = 0, totHoras = 0;
     resumoRows.forEach((r) => {
-      const rowIdx = aoa.length;
-      aoa.push([
+      const row = ws.addRow([
         r.name, r.localPrincipal, r.diasComRegisto, r.diasCompletos, r.homeOfficeCount, r.diasIncompletos,
         r.totalHoursMs / 86400000,
-        r.mediaHorasMs ? r.mediaHorasMs / 86400000 : "",
-        r.entradaMediaFrac != null ? r.entradaMediaFrac : "",
-        r.saidaMediaFrac != null ? r.saidaMediaFrac : "",
+        r.mediaHorasMs ? r.mediaHorasMs / 86400000 : null,
+        r.entradaMediaFrac != null ? r.entradaMediaFrac : null,
+        r.saidaMediaFrac != null ? r.saidaMediaFrac : null,
       ]);
-      formatSpecs.push({ r: rowIdx, c: 6, z: "[h]:mm" });
-      if (r.mediaHorasMs) formatSpecs.push({ r: rowIdx, c: 7, z: "[h]:mm" });
-      if (r.entradaMediaFrac != null) formatSpecs.push({ r: rowIdx, c: 8, z: "h:mm" });
-      if (r.saidaMediaFrac != null) formatSpecs.push({ r: rowIdx, c: 9, z: "h:mm" });
+      styleDataRow(row, 10, null);
+      row.getCell(1).alignment = { vertical: "top" };
+      row.getCell(2).alignment = { vertical: "top" };
+      for (let c = 3; c <= 10; c++) row.getCell(c).alignment = { horizontal: "center", vertical: "top" };
+      row.getCell(7).numFmt = "[h]:mm";
+      if (r.mediaHorasMs) row.getCell(8).numFmt = "[h]:mm";
+      if (r.entradaMediaFrac != null) row.getCell(9).numFmt = "h:mm";
+      if (r.saidaMediaFrac != null) row.getCell(10).numFmt = "h:mm";
       totDias += r.diasComRegisto; totCompletos += r.diasCompletos;
       totHomeOffice += r.homeOfficeCount; totIncompletos += r.diasIncompletos; totHoras += r.totalHoursMs;
     });
-    const totalRowIdx = aoa.length;
-    aoa.push(["TOTAL", "", totDias, totCompletos, totHomeOffice, totIncompletos, totHoras / 86400000, "", "", ""]);
-    formatSpecs.push({ r: totalRowIdx, c: 6, z: "[h]:mm" });
 
-    aoa.push([]);
-    aoa.push([]);
-    aoa.push(["Pontos a verificar"]);
-    const subHeaderIdx = aoa.length;
-    aoa.push(["Funcionário", "Data", "Ocorrência"]);
-    merges.push({ s: { r: subHeaderIdx, c: 2 }, e: { r: subHeaderIdx, c: 9 } });
+    const totalRow = ws.addRow(["TOTAL", "", totDias, totCompletos, totHomeOffice, totIncompletos, totHoras / 86400000, "", "", ""]);
+    styleDataRow(totalRow, 10, REPORT_COLOR.totalFill);
+    for (let c = 1; c <= 10; c++) totalRow.getCell(c).font = { bold: true, size: 10 };
+    for (let c = 3; c <= 10; c++) totalRow.getCell(c).alignment = { horizontal: "center" };
+    totalRow.getCell(7).numFmt = "[h]:mm";
+
+    ws.addRow([]);
+    ws.addRow([]);
+    ws.addRow(["Pontos a verificar"]).getCell(1).font = { bold: true, size: 12, color: { argb: REPORT_COLOR.navy } };
+    const subHeaderRow = ws.addRow(["Funcionário", "Data", "Ocorrência"]);
+    ["Funcionário", "Data", "Ocorrência"].forEach((_, i) => {
+      const cell = subHeaderRow.getCell(i + 1);
+      cell.font = { bold: true, size: 10, color: { argb: REPORT_COLOR.white } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: REPORT_COLOR.navy } };
+      cell.border = ALL_BORDERS;
+    });
+    ws.mergeCells(subHeaderRow.number, 3, subHeaderRow.number, 10);
 
     resumoRows.forEach((r) => {
       r.ocorrencias.forEach((o) => {
-        const rowIdx = aoa.length;
-        aoa.push([r.name, o.date, o.text]);
-        formatSpecs.push({ r: rowIdx, c: 1, z: "dd/mm/yyyy" });
-        merges.push({ s: { r: rowIdx, c: 2 }, e: { r: rowIdx, c: 9 } });
+        const row = ws.addRow([r.name, o.date, o.text]);
+        row.getCell(1).border = ALL_BORDERS;
+        row.getCell(2).border = ALL_BORDERS;
+        row.getCell(2).numFmt = "dd/mm/yyyy";
+        row.getCell(2).alignment = { horizontal: "center" };
+        row.getCell(3).border = ALL_BORDERS;
+        row.getCell(3).alignment = { wrapText: true };
+        ws.mergeCells(row.number, 3, row.number, 10);
       });
     });
 
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws["!cols"] = [{ wch: 18 }, { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 13 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }];
-    ws["!merges"] = merges;
-    applyNumFormats(ws, formatSpecs);
+    ws.views = [{ state: "frozen", xSplit: 1, ySplit: headerRow.number }];
     return ws;
   }
 
-  function buildRegistosOriginaisSheet(attendanceRecords) {
+  function buildRegistosOriginaisSheet(wb, attendanceRecords) {
+    const ws = wb.addWorksheet("Registos Originais");
+    ws.columns = [{ width: 16 }, { width: 13 }, { width: 20 }, { width: 10 }, { width: 17 }, { width: 60 }, { width: 55 }, { width: 11 }];
+    addTitleBlock(ws, "Registos Originais (como exportados do sistema)", null, null);
     const header = ["Funcionário", "Departamento", "Local", "Direção", "Data/Hora", "Nota", "Tarefas", "Estado"];
-    const aoa = [
-      ...companyHeaderLines(),
-      ["Registos Originais (como exportados do sistema)"],
-      [],
-      header,
-    ];
+    const headerRow = addHeaderRow(ws, header);
+
     const sorted = [...attendanceRecords].sort((a, b) => {
       const nameA = a.employees?.name || "", nameB = b.employees?.name || "";
       if (nameA !== nameB) return nameA.localeCompare(nameB, "pt");
       return new Date(a.created_at) - new Date(b.created_at);
     });
-    const formatSpecs = [];
     sorted.forEach((rec) => {
-      const rowIdx = aoa.length;
-      aoa.push([
+      const isEntrada = rec.direction === "entrada";
+      const row = ws.addRow([
         rec.employees?.name || "", rec.employees?.department || "", rec.locations?.name || "",
-        rec.direction === "entrada" ? "Entrada" : "Saída",
+        isEntrada ? "Entrada" : "Saída",
         new Date(rec.created_at),
         rec.note || "", formatTasksSummary(rec.tasks),
         rec.review_status ? rec.review_status.charAt(0).toUpperCase() + rec.review_status.slice(1) : "",
       ]);
-      formatSpecs.push({ r: rowIdx, c: 4, z: "dd/mm/yyyy hh:mm" });
+      styleDataRow(row, 8, null);
+      for (let c = 1; c <= 8; c++) row.getCell(c).alignment = { vertical: "top" };
+      row.getCell(4).font = { size: 10, color: { argb: isEntrada ? REPORT_COLOR.green : REPORT_COLOR.orange } };
+      row.getCell(5).numFmt = "dd/mm/yyyy hh:mm";
+      row.getCell(6).alignment = { vertical: "top", wrapText: true };
+      row.getCell(7).alignment = { vertical: "top", wrapText: true };
     });
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws["!cols"] = [{ wch: 16 }, { wch: 13 }, { wch: 20 }, { wch: 10 }, { wch: 17 }, { wch: 60 }, { wch: 55 }, { wch: 11 }];
-    applyNumFormats(ws, formatSpecs);
+    ws.views = [{ state: "frozen", xSplit: 0, ySplit: headerRow.number }];
     return ws;
   }
 
@@ -2090,15 +2153,26 @@
     const periodoLabel = `${startDate.toLocaleDateString("pt-PT")} a ${endDate.toLocaleDateString("pt-PT")}`;
     const geradoLabel = new Date().toLocaleString("pt-PT");
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, buildPresencasDiariasSheet(employees, periodoLabel, geradoLabel), "Presenças Diárias");
-    XLSX.utils.book_append_sheet(wb, buildResumoSheet(resumoRows, periodoLabel, geradoLabel), "Resumo");
-    XLSX.utils.book_append_sheet(wb, buildRegistosOriginaisSheet(attendanceRows), "Registos Originais");
+    const wb = new ExcelJS.Workbook();
+    wb.creator = cfg.APP_TITLE || "Ponto PROQUAL";
+    buildPresencasDiariasSheet(wb, employees, periodoLabel, geradoLabel);
+    buildResumoSheet(wb, resumoRows, periodoLabel, geradoLabel);
+    buildRegistosOriginaisSheet(wb, attendanceRows);
 
     const pad2 = (n) => String(n).padStart(2, "0");
     const fmtDDMM = (d) => `${pad2(d.getDate())}-${pad2(d.getMonth() + 1)}`;
     const filename = `Presencas_PROQUAL-${fmtDDMM(startDate)}_a_${fmtDDMM(endDate)}-${endDate.getFullYear()}.xlsx`;
-    XLSX.writeFile(wb, filename);
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   });
 
   // -----------------------------------------------------------

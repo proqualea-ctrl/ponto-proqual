@@ -221,14 +221,23 @@ projeto que já está a funcionar. Não é preciso recomeçar do zero.
       "Home Office" (ex.: nota "Home Office\nElaboração de relatório
       mensal" → aparece como Home Office e a primeira linha é retirada para
       mostrar só a descrição da tarefa).
-    - **Duas notas sobre o formato:** (1) a coluna "Horas" segue a mesma
-      regra do Resumo mensal/Ponto Individual e já não conta a hora de
-      almoço (12h-13h) — se precisares de horas em bruto (sem este
-      ajuste), diz para ajustarmos; (2) a versão gratuita da biblioteca de
-      Excel usada pela app não escreve cores/negrito nas células, por isso
-      o ficheiro sai sem o fundo azul-marinho nos cabeçalhos — as colunas,
-      os dados e os formatos de hora/data são os mesmos, só a cor é que
-      não é possível replicar sem mudar de biblioteca (paga).
+    - **Visual** — o ficheiro sai formatado, com o mesmo estilo do modelo
+      fornecido pela Gestão: cabeçalhos a azul-marinho com texto branco,
+      linhas de cada funcionário alternadas (branco / azul muito claro) na
+      folha "Presenças Diárias", e a coluna "Situação" colorida consoante o
+      caso — verde para "Completo", azul para ausências justificadas (Home
+      Office ou outro motivo) e vermelho para dias com registo em falta
+      ("Sem entrada"/"Sem saída"), para serem fáceis de identificar de
+      relance. Na folha "Registos Originais", "Entrada" sai a verde e
+      "Saída" a laranja. Isto usa a biblioteca gratuita **ExcelJS**
+      (carregada via CDN, tal como as outras bibliotecas da app) em vez da
+      SheetJS usada nos outros dois exports (Ponto Individual e Cópia de
+      segurança) — só a SheetJS Community não escreve cores, a ExcelJS
+      escreve.
+    - **Nota sobre as horas:** a coluna "Horas" segue a mesma regra do
+      Resumo mensal/Ponto Individual e já não conta a hora de almoço
+      (12h-13h) — se precisares de horas em bruto (sem este ajuste), diz
+      para ajustarmos.
 
 ---
 
@@ -525,7 +534,12 @@ subpastas). Para atualizar:
     funcionário/dia, com a Situação e as Observações certas), "Resumo"
     (totais por funcionário + a tabela "Pontos a verificar" com as
     ocorrências do intervalo) e "Registos Originais" (os registos em
-    bruto).
+    bruto) — e confirma também que o ficheiro vem formatado (cabeçalhos a
+    azul-marinho, linhas alternadas e a coluna "Situação" colorida por
+    caso). Este é o único dos exports da app que depende de uma biblioteca
+    adicional (ExcelJS) carregada da internet — se o botão não produzir
+    ficheiro nenhum, confirma que o telemóvel/computador tinha ligação à
+    internet nesse momento.
 
 ---
 
